@@ -8,6 +8,7 @@
 | [Arquitetura](architecture.md) | Visão geral dos componentes e fluxo de dados |
 | [S1-01 — Bucket S3](s1-01-s3-bucket.md) | Bucket pipeline, pastas, versionamento, IAM S3 |
 | [S1-02 — Glue Job](s1-02-glue-job.md) | Python Shell, argumentos, execução e integração Step Functions |
+| [S1-03 — Step Functions](s1-03-step-functions.md) | Agendamento mensal, ASL, EventBridge e alertas SNS |
 
 ## Convenção de nomenclatura
 

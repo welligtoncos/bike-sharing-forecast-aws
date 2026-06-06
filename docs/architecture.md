@@ -6,8 +6,10 @@ Visão geral da infraestrutura provisionada pelo Terraform neste repositório.
 
 ```mermaid
 flowchart TB
-    subgraph Orquestracao["Orquestração (futuro)"]
+    subgraph Orquestracao["Orquestração"]
+        EB[EventBridge<br/>dia 1 / mes]
         SF[Step Functions]
+        SNS[SNS Alerts]
     end
 
     subgraph Compute["Compute"]
@@ -35,6 +37,8 @@ flowchart TB
         GC[Glue Data Catalog<br/>database b3_raw]
     end
 
+    SF -->|"falha"| SNS
+    EB -->|"cron mensal"| SF
     SF -->|"StartJobRun<br/>--ref_date, --s3_input_path"| GJ
     GJ --> ROLE
     ROLE --> S3

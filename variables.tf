@@ -53,3 +53,39 @@ variable "glue_db_name" {
     error_message = "glue_db_name deve conter apenas letras minusculas, numeros e underscores."
   }
 }
+
+variable "sns_pipeline_alerts_arn" {
+  description = "ARN do topico SNS de alertas. Use topico pre-existente se o operador Terraform nao tem sns:ListTagsForResource."
+  type        = string
+  default     = ""
+}
+
+variable "create_sns_topic" {
+  description = "Cria topico SNS via Terraform. Requer sns:CreateTopic e sns:ListTagsForResource."
+  type        = bool
+  default     = false
+}
+
+variable "pipeline_alert_email" {
+  description = "E-mail para alertas SNS em falha do pipeline (requer confirmacao no inbox)."
+  type        = string
+  default     = ""
+}
+
+variable "create_eventbridge_schedule" {
+  description = "Cria regra EventBridge mensal. Requer events:PutRule e events:PutTargets."
+  type        = bool
+  default     = true
+}
+
+variable "monthly_pipeline_schedule" {
+  description = "Cron EventBridge: execucao mensal (padrao dia 1 as 06:00 UTC)."
+  type        = string
+  default     = "cron(0 6 1 * ? *)"
+}
+
+variable "monthly_pipeline_enabled" {
+  description = "Habilita a regra EventBridge do pipeline mensal."
+  type        = bool
+  default     = true
+}

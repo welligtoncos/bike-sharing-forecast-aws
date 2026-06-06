@@ -39,4 +39,15 @@ locals {
   ]
   glue_job_log_group_arn        = "arn:aws:logs:${var.aws_region}:${var.aws_account_id}:log-group:/aws-glue/python-jobs"
   glue_job_log_group_stream_arn = "${local.glue_job_log_group_arn}:*"
+
+  # S1-03 — Step Functions mensal
+  s3_input_day_csv_path              = "s3://${local.s3_bucket_name}/raw/day.csv"
+  sfn_monthly_pipeline_name          = "${local.name_prefix}-sfn-monthly-pipeline"
+  sns_pipeline_alerts_name           = "${local.name_prefix}-sns-pipeline-alerts"
+  eventbridge_monthly_pipeline_name  = "${local.name_prefix}-eventbridge-monthly-pipeline"
+  iam_role_stepfunctions             = "${local.name_prefix}-iam-stepfunctions"
+  iam_role_eventbridge_sfn           = "${local.name_prefix}-iam-eventbridge-sfn"
+
+  # SNS: topico pre-existente (evita sns:ListTagsForResource no refresh do provider)
+  sns_topic_arn = var.sns_pipeline_alerts_arn != "" ? var.sns_pipeline_alerts_arn : "arn:aws:sns:${var.aws_region}:${var.aws_account_id}:${local.sns_pipeline_alerts_name}"
 }

@@ -46,6 +46,12 @@ provider "aws" {
   }
 }
 
+# Provider sem default_tags — SNS/EventBridge nesta conta nao tem permissao sns:TagResource.
+provider "aws" {
+  alias  = "no_default_tags"
+  region = var.aws_region
+}
+
 # Bucket unico do pipeline. Nome global: {project}-{env}-s3-pipeline-{account_id}
 # force_destroy = true permite destroy mesmo com objetos (util em dev).
 resource "aws_s3_bucket" "pipeline" {

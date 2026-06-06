@@ -52,3 +52,28 @@ output "glue_script_parse_args_s3_uri" {
   description = "URI S3 do script parse_args_job.py."
   value       = "s3://${aws_s3_bucket.pipeline.id}/${local.glue_script_parse_args_key}"
 }
+
+output "sfn_monthly_pipeline_name" {
+  description = "Nome da state machine Step Functions (S1-03)."
+  value       = aws_sfn_state_machine.monthly_pipeline.name
+}
+
+output "sfn_monthly_pipeline_arn" {
+  description = "ARN da state machine Step Functions (S1-03)."
+  value       = aws_sfn_state_machine.monthly_pipeline.arn
+}
+
+output "sns_pipeline_alerts_arn" {
+  description = "ARN do topico SNS de alertas de falha."
+  value       = local.sns_topic_arn
+}
+
+output "eventbridge_monthly_pipeline_rule" {
+  description = "Nome da regra EventBridge do agendamento mensal (null se create_eventbridge_schedule = false)."
+  value       = var.create_eventbridge_schedule ? aws_cloudwatch_event_rule.monthly_pipeline[0].name : null
+}
+
+output "s3_input_day_csv_path" {
+  description = "Caminho S3 padrao passado ao Glue Job (raw/day.csv)."
+  value       = local.s3_input_day_csv_path
+}

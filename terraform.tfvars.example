@@ -6,3 +6,12 @@ aws_account_id = "000000000000" # aws sts get-caller-identity --query Account --
 aws_region     = "us-east-1"    # regiao do provider e dos recursos S3/IAM
 environment    = "dev"          # dev | stg | staging | prod
 glue_db_name   = "b3_raw"       # database Glue referenciado na policy IAM
+
+# S1-03 — SNS (topico ja criado na conta; create_sns_topic = true se tiver sns:ListTagsForResource)
+sns_pipeline_alerts_arn = "arn:aws:sns:us-east-1:000000000000:glue-b3-dev-sns-pipeline-alerts"
+create_sns_topic             = false
+create_eventbridge_schedule  = false  # true quando tiver events:PutRule
+pipeline_alert_email         = "seu-email@exemplo.com"
+
+# cron: dia 1 de cada mes as 06:00 UTC
+# monthly_pipeline_schedule = "cron(0 6 1 * ? *)"

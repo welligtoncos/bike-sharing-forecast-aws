@@ -20,6 +20,11 @@ O usuário que executa `terraform apply` precisa de permissões para:
 | S3 | `CreateBucket`, `PutObject`, `PutBucket*` |
 | IAM | `CreateRole`, `PutRolePolicy`, `AttachRolePolicy` |
 | Glue | `CreateJob`, `GetJob`, `StartJobRun` |
+| Step Functions | `CreateStateMachine`, `StartExecution`, `DescribeExecution` |
+| EventBridge | `PutRule`, `PutTargets` |
+| SNS | `CreateTopic`, `Subscribe`, `Publish` |
+
+> **Nota:** se `sns:ListTagsForResource` ou `events:TagResource` falhar, o provider `aws.no_default_tags` evita tags automáticas em SNS/EventBridge/SFN. Se `events:PutRule` falhar, solicite permissão ao administrador IAM.
 
 > A **role Glue** (`glue-b3-dev-iam-glue`) recebe permissões próprias para S3, Catalog e CloudWatch Logs durante a execução do job — isso é independente das permissões do seu usuário IAM.
 
