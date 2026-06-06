@@ -12,6 +12,10 @@ sns_pipeline_alerts_arn = "arn:aws:sns:us-east-1:000000000000:glue-b3-dev-sns-pi
 create_sns_topic             = false
 create_eventbridge_schedule  = false  # true quando tiver events:PutRule
 enable_lake_formation        = false  # true quando tiver lakeformation:GrantPermissions
+rmse_threshold               = 700    # S4-03 — alarme CloudWatch se RMSE exceder
+create_cloudwatch_log_metric_filter = false  # true se tiver logs:PutMetricFilter
+create_cloudwatch_alarms            = false  # true se tiver cloudwatch:ListTagsForResource
+create_cloudwatch_dashboard         = false  # true se tiver cloudwatch:PutDashboard
 pipeline_alert_email         = "seu-email@exemplo.com"
 
 # cron: dia 1 de cada mes as 06:00 UTC

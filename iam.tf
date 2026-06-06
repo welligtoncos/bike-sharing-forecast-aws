@@ -132,6 +132,30 @@ resource "aws_iam_role_policy" "glue_catalog_write" {
 }
 
 # Logs do Glue Python Shell Job em /aws-glue/python-jobs (continuous logging).
+resource "aws_iam_role_policy" "glue_cloudwatch_metrics" {
+  name = "${local.name_prefix}-glue-cloudwatch-metrics"
+  role = aws_iam_role.glue.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "PublishPipelineMetrics"
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:PutMetricData",
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "cloudwatch:namespace" = local.cloudwatch_pipeline_namespace
+          }
+        }
+      },
+    ]
+  })
+}
+
 resource "aws_iam_role_policy" "glue_logs" {
   name = "${local.name_prefix}-glue-logs"
   role = aws_iam_role.glue.id

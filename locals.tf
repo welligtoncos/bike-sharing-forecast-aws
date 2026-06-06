@@ -54,6 +54,11 @@ locals {
   athena_results_prefix        = "athena-results/"
   sfn_validate_predictions_name = "${local.name_prefix}-sfn-validate-predictions"
 
+  # S4-03 — CloudWatch observabilidade
+  cloudwatch_pipeline_namespace      = "${var.project_name}/${var.environment}/Pipeline"
+  sfn_train_with_observability_name  = "${local.name_prefix}-sfn-train-with-observability"
+  glue_module_pipeline_observability_key = "scripts/pipeline_observability.py"
+
   glue_catalog_arn  = "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:catalog"
   glue_database_arn = "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:database/${var.glue_db_name}"
   glue_table_arns = [

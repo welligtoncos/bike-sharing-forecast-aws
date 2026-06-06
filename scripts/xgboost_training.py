@@ -241,3 +241,39 @@ def train_and_evaluate(
     metrics["metrics_json"] = metrics_uri
 
     return metrics
+
+
+def train_and_evaluate_with_observability(
+    s3_input_path: str,
+    ref_date: str,
+    *,
+    test_size: float = TEST_SIZE,
+    random_state: int = RANDOM_STATE,
+    rmse_threshold: float | None = None,
+    cloudwatch_namespace: str | None = None,
+) -> dict[str, Any]:
+    """
+    S3-01 + S4-03: treino, metricas S3 e publicacao RMSE/MAE no CloudWatch.
+    """
+    from pipeline_observability import DEFAULT_NAMESPACE, publish_training_metrics
+
+    metrics = train_and_evaluate(
+        s3_input_path,
+        ref_date,
+        test_size=test_size,
+        random_state=random_state,
+    )
+
+    namespace = cloudwatch_namespace or DEFAULT_NAMESPACE
+    breached = publish_training_metrics(
+        namespace=namespace,
+        ref_date=ref_date,
+        rmse=metrics["rmse"],
+        mae=metrics["mae"],
+        rmse_threshold=rmse_threshold,
+    )
+
+    metrics["rmse_threshold"] = rmse_threshold
+    metrics["rmse_threshold_breached"] = breached
+    metrics["cloudwatch_namespace"] = namespace
+    return metrics

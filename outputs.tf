@@ -133,6 +133,36 @@ output "athena_query_predictions_example" {
   value       = "SELECT dteday, cnt_real, cnt_pred, ABS(cnt_real - cnt_pred) AS abs_error FROM ${var.glue_predictions_db_name}.predictions WHERE ref_date = '2011-06-01' ORDER BY dteday ASC"
 }
 
+output "cloudwatch_pipeline_namespace" {
+  description = "Namespace CloudWatch das metricas customizadas (S4-03)."
+  value       = local.cloudwatch_pipeline_namespace
+}
+
+output "cloudwatch_dashboard_name" {
+  description = "Dashboard CloudWatch do pipeline (S4-03)."
+  value       = var.create_cloudwatch_dashboard ? aws_cloudwatch_dashboard.pipeline[0].dashboard_name : "${local.name_prefix}-pipeline-dashboard"
+}
+
+output "cloudwatch_alarm_glue_job_failure" {
+  description = "Alarme CloudWatch — falha Glue Job (S4-03)."
+  value       = var.create_cloudwatch_alarms ? aws_cloudwatch_metric_alarm.glue_job_failure[0].alarm_name : "${local.name_prefix}-alarm-glue-job-failure"
+}
+
+output "cloudwatch_alarm_rmse_threshold" {
+  description = "Alarme CloudWatch — RMSE acima do threshold (S4-03)."
+  value       = var.create_cloudwatch_alarms ? aws_cloudwatch_metric_alarm.rmse_threshold[0].alarm_name : "${local.name_prefix}-alarm-rmse-threshold"
+}
+
+output "sfn_train_with_observability_arn" {
+  description = "Step Functions treino XGBoost com rmse_threshold (S4-03)."
+  value       = aws_sfn_state_machine.train_with_observability.arn
+}
+
+output "rmse_threshold_default" {
+  description = "RMSE threshold padrao (S4-03); Step Functions input rmse_threshold sobrescreve."
+  value       = var.rmse_threshold
+}
+
 output "athena_workgroup_name" {
   description = "Workgroup Athena do pipeline (S4-02)."
   value       = aws_athena_workgroup.pipeline.name

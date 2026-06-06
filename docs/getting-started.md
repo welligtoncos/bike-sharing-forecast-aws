@@ -179,6 +179,8 @@ terraform destroy -var-file="terraform.tfvars"
 
 ## Próximos passos
 
+- [Guia de testes da esteira](pipeline-testing-guide.md) — validação completa S2 → S4 para novos devs
+- [Casos de uso comerciais](commercial-use-cases.md) — onde aplicar e como adaptar
 - [Arquitetura](architecture.md) — fluxo completo S1–S4
 - [S4-02 — Query Athena](s4-02-athena-query.md) — validar predições do mês
-- [README](../README.md) — pipeline manual S2 → S4
+- [README](../README.md) — visão geral do repositório

@@ -37,6 +37,17 @@ resource "aws_s3_object" "glue_module_xgboost_training" {
   }
 }
 
+resource "aws_s3_object" "glue_module_pipeline_observability" {
+  bucket = aws_s3_bucket.pipeline.id
+  key    = local.glue_module_pipeline_observability_key
+  source = "${path.module}/scripts/pipeline_observability.py"
+  etag   = filemd5("${path.module}/scripts/pipeline_observability.py")
+
+  tags = {
+    Name = local.glue_module_pipeline_observability_key
+  }
+}
+
 resource "aws_glue_job" "train_xgboost" {
   name         = local.glue_job_train_xgboost_name
   role_arn     = aws_iam_role.glue.arn
@@ -58,11 +69,14 @@ resource "aws_glue_job" "train_xgboost" {
     "--extra-py-files" = join(",", [
       "s3://${aws_s3_bucket.pipeline.id}/${local.glue_module_schema_validation_key}",
       "s3://${aws_s3_bucket.pipeline.id}/${local.glue_module_xgboost_training_key}",
+      "s3://${aws_s3_bucket.pipeline.id}/${local.glue_module_pipeline_observability_key}",
     ])
     # xgboost/scikit-learn instalados no cold start; pyarrow/s3fs para Parquet S3.
     "--additional-python-modules" = "s3fs,pyarrow,xgboost,scikit-learn"
     "--s3_input_path"               = local.s3_input_day_csv_path
     "--ref_date"                    = "1970-01-01"
+    "--rmse_threshold"              = tostring(var.rmse_threshold)
+    "--cloudwatch_namespace"        = local.cloudwatch_pipeline_namespace
   }
 
   tags = {
@@ -72,10 +86,12 @@ resource "aws_glue_job" "train_xgboost" {
   depends_on = [
     aws_s3_object.glue_module_schema_validation,
     aws_s3_object.glue_module_xgboost_training,
+    aws_s3_object.glue_module_pipeline_observability,
     aws_s3_object.glue_script_train_xgboost,
     aws_iam_role_policy_attachment.glue_service,
     aws_iam_role_policy.glue_s3,
     aws_iam_role_policy.glue_catalog,
+    aws_iam_role_policy.glue_cloudwatch_metrics,
     aws_iam_role_policy.glue_logs,
   ]
 }

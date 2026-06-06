@@ -71,6 +71,30 @@ variable "enable_lake_formation" {
   default     = false
 }
 
+variable "rmse_threshold" {
+  description = "RMSE maximo aceitavel (S4-03). Step Functions sobrescreve via input rmse_threshold."
+  type        = number
+  default     = 700
+}
+
+variable "create_cloudwatch_log_metric_filter" {
+  description = "Metric filter em /aws-glue/python-jobs (requer logs:PutMetricFilter)."
+  type        = bool
+  default     = false
+}
+
+variable "create_cloudwatch_alarms" {
+  description = "Gerencia alarmes CloudWatch via Terraform (requer cloudwatch:ListTagsForResource)."
+  type        = bool
+  default     = false
+}
+
+variable "create_cloudwatch_dashboard" {
+  description = "Cria dashboard CloudWatch via Terraform (requer cloudwatch:PutDashboard)."
+  type        = bool
+  default     = false
+}
+
 variable "sns_pipeline_alerts_arn" {
   description = "ARN do topico SNS de alertas. Use topico pre-existente se o operador Terraform nao tem sns:ListTagsForResource."
   type        = string

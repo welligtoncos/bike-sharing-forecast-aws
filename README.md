@@ -186,8 +186,9 @@ O dataset de Bike Sharing tem **sazonalidade** (temperatura, estação do ano, d
 |-------|---------|--------|
 | S4-01 | Tabela `bike_sharing.predictions` no Glue Catalog, partição `ref_date`, schema do Parquet | ✅ |
 | S4-02 | Query Athena (`dteday`, `cnt_real`, `cnt_pred`, `abs_error`) + Step Functions parametrizável | ✅ |
+| S4-03 | Alarmes CloudWatch (falha Glue + RMSE > threshold), SNS, dashboard, SFN `train-with-observability` | ✅ |
 
-Próximas stories: job de inferência em produção, serializar modelo em `models/`, encadear jobs no Step Functions mensal, alarmes RMSE.
+Próximas stories: job de inferência em produção, serializar modelo em `models/`, encadear jobs no Step Functions mensal.
 
 ## Início rápido
 
@@ -312,11 +313,14 @@ Query SQL direta (Athena console ou CLI): ver [S4-02 — Query Athena](docs/s4-0
 |-----------|----------|
 | [Getting Started](docs/getting-started.md) | Pré-requisitos, deploy, validação |
 | [Arquitetura](docs/architecture.md) | Fluxo de dados, recursos AWS, IAM |
+| [**Guia de testes da esteira**](docs/pipeline-testing-guide.md) | Como devs validam S2→S4, pytest, checklist |
+| [**Casos de uso comerciais**](docs/commercial-use-cases.md) | Cenários de negócio e como adaptar o pipeline |
 | [S1-01 — Bucket S3](docs/s1-01-s3-bucket.md) | Estrutura de pastas e versionamento |
 | [S1-02 — Glue Job](docs/s1-02-glue-job.md) | Argumentos, execução, logs |
 | [S1-03 — Step Functions](docs/s1-03-step-functions.md) | Agendamento mensal, ASL, SNS, EventBridge |
 | [S4-01 — Glue Catalog](docs/s4-01-glue-catalog.md) | Tabela `bike_sharing.predictions`, Lake Formation |
 | [S4-02 — Query Athena](docs/s4-02-athena-query.md) | SQL `abs_error`, workgroup, Step Functions |
+| [S4-03 — CloudWatch](docs/s4-03-cloudwatch.md) | Alarmes Glue/RMSE, dashboard, SNS |
 
 ## Estrutura do repositório
 

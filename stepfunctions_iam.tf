@@ -39,7 +39,10 @@ resource "aws_iam_role_policy" "stepfunctions_glue_sns" {
           "glue:GetJobRuns",
           "glue:BatchStopJobRun",
         ]
-        Resource = aws_glue_job.parse_args.arn
+        Resource = [
+          aws_glue_job.parse_args.arn,
+          aws_glue_job.train_xgboost.arn,
+        ]
       },
       {
         Sid    = "PublishPipelineAlerts"

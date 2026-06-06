@@ -8,6 +8,8 @@
 |-----------|-----------|
 | [Getting Started](getting-started.md) | Configurar, aplicar Terraform e validar o pipeline |
 | [Arquitetura](architecture.md) | Componentes, fluxo S1–S4, IAM, S3 |
+| [**Guia de testes da esteira**](pipeline-testing-guide.md) | Onboarding de devs: pytest, S2→S4, checklist, troubleshooting |
+| [**Casos de uso comerciais**](commercial-use-cases.md) | Cenários de negócio, adaptação e proposta de valor |
 
 ## Sprint 1 — Infraestrutura
 
@@ -23,6 +25,7 @@
 |-----------|-----------|
 | [S4-01 — Glue Catalog](s4-01-glue-catalog.md) | Tabela `bike_sharing.predictions`, partição `ref_date` |
 | [S4-02 — Query Athena](s4-02-athena-query.md) | SQL `abs_error`, Step Functions parametrizável |
+| [S4-03 — CloudWatch](s4-03-cloudwatch.md) | Alarmes, dashboard, RMSE threshold via SFN |
 
 > Sprints 2 (features) e 3 (treino XGBoost) estão documentados no [README](../README.md) e cobertos por testes em `tests/`.
 
