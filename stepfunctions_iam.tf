@@ -84,7 +84,10 @@ resource "aws_iam_role_policy" "stepfunctions_athena" {
         Action = [
           "glue:GetDatabase",
           "glue:GetTable",
+          "glue:GetTables",
+          "glue:GetPartition",
           "glue:GetPartitions",
+          "glue:BatchGetPartition",
         ]
         Resource = concat(
           [local.glue_catalog_arn, local.glue_predictions_database_arn],
