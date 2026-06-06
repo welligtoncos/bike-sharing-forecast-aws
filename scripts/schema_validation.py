@@ -1,8 +1,5 @@
 """
-S2-01 / S2-02 — Leitura, validacao de schema e filtro por ref_date (day.csv).
-
-Le o CSV do S3 via pandas + s3fs, valida colunas obrigatorias e filtra
-registros cujo dteday corresponde ao mes/ano de ref_date.
+S2-01 / S2-02 / S2-03 — Leitura, validacao, filtro e persistencia Parquet (day.csv).
 """
 
 from __future__ import annotations
@@ -15,16 +12,21 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 DATE_COLUMN = "dteday"
+TARGET_COLUMN = "cnt"
 
-REQUIRED_COLUMNS: tuple[str, ...] = (
+FEATURE_COLUMNS: tuple[str, ...] = (
     "season",
     "temp",
     "hum",
     "windspeed",
     "weekday",
-    "cnt",
-    DATE_COLUMN,
 )
+
+REQUIRED_COLUMNS: tuple[str, ...] = FEATURE_COLUMNS + (TARGET_COLUMN, DATE_COLUMN)
+
+OUTPUT_COLUMNS: tuple[str, ...] = FEATURE_COLUMNS + (TARGET_COLUMN,)
+
+FEATURES_PARQUET_NAME = "features.parquet"
 
 
 def validate_schema(df: pd.DataFrame, required: Sequence[str] = REQUIRED_COLUMNS) -> None:
@@ -103,3 +105,49 @@ def process_day_csv(s3_path: str, ref_date: str) -> pd.DataFrame | None:
 
     logger.info("DataFrame shape apos filtro: %s", filtered.shape)
     return filtered
+
+
+def select_feature_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Seleciona features + target para persistencia em Parquet."""
+    missing = [column for column in OUTPUT_COLUMNS if column not in df.columns]
+    if missing:
+        if len(missing) == 1:
+            raise ValueError(f"Coluna ausente no schema: '{missing[0]}'")
+        names = ", ".join(f"'{column}'" for column in missing)
+        raise ValueError(f"Colunas ausentes no schema: {names}")
+
+    return df.loc[:, list(OUTPUT_COLUMNS)].copy()
+
+
+def features_parquet_uri(s3_input_path: str, ref_date: str) -> str:
+    """Monta s3://{bucket}/features/{ref_date}/features.parquet a partir do path raw."""
+    if not s3_input_path.startswith("s3://"):
+        raise ValueError(f"Caminho S3 invalido (esperado s3://...): {s3_input_path}")
+
+    bucket = s3_input_path[5:].split("/", 1)[0]
+    return f"s3://{bucket}/features/{ref_date}/{FEATURES_PARQUET_NAME}"
+
+
+def save_features_parquet(df: pd.DataFrame, s3_uri: str) -> None:
+    """Salva DataFrame em Parquet no S3 via pandas + pyarrow."""
+    if not s3_uri.startswith("s3://"):
+        raise ValueError(f"Caminho S3 invalido (esperado s3://...): {s3_uri}")
+
+    df.to_parquet(s3_uri, engine="pyarrow", index=False)
+    logger.info("Features salvas em %s (shape=%s, colunas=%s)", s3_uri, df.shape, list(df.columns))
+
+
+def process_and_save_features(s3_path: str, ref_date: str) -> str | None:
+    """
+    Carrega, valida, filtra, seleciona colunas e salva Parquet particionado por ref_date.
+
+    Retorna URI do Parquet ou None se nao houver registros no mes.
+    """
+    filtered = process_day_csv(s3_path, ref_date)
+    if filtered is None:
+        return None
+
+    features = select_feature_columns(filtered)
+    output_uri = features_parquet_uri(s3_path, ref_date)
+    save_features_parquet(features, output_uri)
+    return output_uri

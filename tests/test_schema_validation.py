@@ -1,4 +1,4 @@
-"""Testes S2-01 / S2-02 — validacao de schema e filtro day.csv."""
+"""Testes S2-01 / S2-02 / S2-03 — validacao, filtro e Parquet day.csv."""
 
 from __future__ import annotations
 
@@ -13,11 +13,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from schema_validation import (  # noqa: E402
     DATE_COLUMN,
+    FEATURE_COLUMNS,
+    OUTPUT_COLUMNS,
     REQUIRED_COLUMNS,
+    TARGET_COLUMN,
+    features_parquet_uri,
     filter_by_ref_date,
     load_and_validate_day_csv,
+    process_and_save_features,
     process_day_csv,
     read_day_csv_from_s3,
+    select_feature_columns,
+    save_features_parquet,
     validate_schema,
 )
 
@@ -141,3 +148,70 @@ def test_process_day_csv_returns_filtered_dataframe(mock_read_csv) -> None:
 
     assert result is not None
     assert len(result) == 5
+
+
+def test_features_parquet_uri_from_raw_path() -> None:
+    uri = features_parquet_uri(
+        "s3://glue-b3-dev-s3-pipeline-303238378103/raw/day.csv",
+        "2011-06-01",
+    )
+
+    assert uri == "s3://glue-b3-dev-s3-pipeline-303238378103/features/2011-06-01/features.parquet"
+
+
+def test_select_feature_columns_keeps_features_and_target() -> None:
+    df = _valid_day_frame(4)
+    extra = df.assign(instant=1, casual=2, registered=3)
+
+    result = select_feature_columns(extra)
+
+    assert list(result.columns) == list(OUTPUT_COLUMNS)
+    assert list(result.columns) == list(FEATURE_COLUMNS) + [TARGET_COLUMN]
+
+
+def test_save_features_parquet_roundtrip_local(tmp_path) -> None:
+    pytest.importorskip("pyarrow")
+    df = select_feature_columns(_valid_day_frame(3))
+    parquet_path = tmp_path / "features.parquet"
+
+    df.to_parquet(parquet_path, engine="pyarrow", index=False)
+    loaded = pd.read_parquet(parquet_path)
+
+    assert list(loaded.columns) == list(OUTPUT_COLUMNS)
+    assert len(loaded) == 3
+
+
+@patch("schema_validation.save_features_parquet")
+@patch("schema_validation.process_day_csv")
+def test_process_and_save_features_writes_partitioned_path(mock_process, mock_save) -> None:
+    mock_process.return_value = _valid_day_frame(2, start="2011-06-01")
+
+    uri = process_and_save_features(
+        "s3://my-bucket/raw/day.csv",
+        "2011-06-01",
+    )
+
+    assert uri == "s3://my-bucket/features/2011-06-01/features.parquet"
+    mock_save.assert_called_once()
+    saved_df = mock_save.call_args[0][0]
+    assert list(saved_df.columns) == list(OUTPUT_COLUMNS)
+
+
+@patch("schema_validation.process_day_csv")
+def test_process_and_save_features_skips_empty_month(mock_process) -> None:
+    mock_process.return_value = None
+
+    assert process_and_save_features("s3://my-bucket/raw/day.csv", "1999-01-01") is None
+
+
+@patch("schema_validation.pd.DataFrame.to_parquet")
+def test_save_features_parquet_uses_pyarrow(mock_to_parquet) -> None:
+    df = select_feature_columns(_valid_day_frame(1))
+
+    save_features_parquet(df, "s3://my-bucket/features/2011-06-01/features.parquet")
+
+    mock_to_parquet.assert_called_once_with(
+        "s3://my-bucket/features/2011-06-01/features.parquet",
+        engine="pyarrow",
+        index=False,
+    )

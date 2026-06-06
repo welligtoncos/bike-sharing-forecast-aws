@@ -55,4 +55,6 @@ locals {
 
   # SNS: topico pre-existente (evita sns:ListTagsForResource no refresh do provider)
   sns_topic_arn = var.sns_pipeline_alerts_arn != "" ? var.sns_pipeline_alerts_arn : "arn:aws:sns:${var.aws_region}:${var.aws_account_id}:${local.sns_pipeline_alerts_name}"
+
+  features_parquet_uri_template = "s3://${local.s3_bucket_name}/features/{ref_date}/features.parquet"
 }

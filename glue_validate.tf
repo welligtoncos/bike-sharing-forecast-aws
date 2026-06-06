@@ -42,7 +42,7 @@ resource "aws_glue_job" "validate_day_csv" {
     "--job-language"                     = "python"
     "--enable-continuous-cloudwatch-log" = "true"
     "--extra-py-files"                   = "s3://${aws_s3_bucket.pipeline.id}/${local.glue_module_schema_validation_key}"
-    "--additional-python-modules"        = "s3fs"
+    "--additional-python-modules"        = "s3fs,pyarrow"
     "--s3_input_path"                    = local.s3_input_day_csv_path
     "--ref_date"                         = "1970-01-01"
   }

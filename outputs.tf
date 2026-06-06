@@ -87,3 +87,8 @@ output "glue_job_validate_day_csv_arn" {
   description = "ARN do Glue Job de validacao de schema day.csv (S2-01)."
   value       = aws_glue_job.validate_day_csv.arn
 }
+
+output "features_parquet_uri_template" {
+  description = "Template S3 das features Parquet particionadas por ref_date (S2-03)."
+  value       = local.features_parquet_uri_template
+}
