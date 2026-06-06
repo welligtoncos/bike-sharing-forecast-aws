@@ -2,7 +2,7 @@
 
 Este documento descreve **como outro desenvolvedor** configura o ambiente, executa a esteira de ponta a ponta e valida cada etapa (S2 → S4 + observabilidade S4-03).
 
-> **Escopo atual:** a Step Function mensal (`monthly_pipeline`) dispara apenas o job `parse_args` (smoke test S1). A esteira completa de ML e analytics é validada **manualmente** ou via SFNs específicas (`validate_predictions`, `train_with_observability`). Encadeamento mensal end-to-end está na roadmap.
+> **Pipeline mensal:** `monthly_pipeline` encadeia S2 → treino → inferência → catalog → Athena. Para testes com dataset 2011–2012, passe `{"ref_date":"2011-06-01"}` no input da execução.
 
 ## Pré-requisitos
 
@@ -82,26 +82,20 @@ python -m pytest tests/ -v
 
 ---
 
-## Fase 2 — Smoke test pós-deploy
-
-Confirme que a infra mínima está operacional:
+## Fase 2 — Smoke test: pipeline mensal completo (SFN)
 
 ```powershell
-$BUCKET = terraform output -raw s3_bucket_name
-
-# Pastas S3
-aws s3 ls "s3://$BUCKET/"
-
-# Job parse_args via Step Functions (S1-03)
 $SFN = terraform output -raw sfn_monthly_pipeline_arn
+
+# Use ref_date do dataset Bike Sharing (2011–2012)
 $exec = aws stepfunctions start-execution `
   --state-machine-arn $SFN `
-  --name "smoke-$(Get-Date -Format 'yyyyMMdd-HHmmss')" `
+  --name "e2e-$(Get-Date -Format 'yyyyMMdd-HHmmss')" `
+  --input '{"ref_date":"2011-06-01"}' `
   --query executionArn --output text
 
-# Aguardar conclusão (polling simples)
 do {
-  Start-Sleep -Seconds 5
+  Start-Sleep -Seconds 15
   $status = aws stepfunctions describe-execution --execution-arn $exec --query status --output text
   Write-Host "SFN status: $status"
 } while ($status -eq "RUNNING")
@@ -109,7 +103,9 @@ do {
 aws stepfunctions describe-execution --execution-arn $exec
 ```
 
-**Critério de sucesso:** `status: SUCCEEDED`.
+**Critério de sucesso:** `status: SUCCEEDED` (5 Glue jobs + Athena; ~10–20 min).
+
+Alternativa smoke S1 isolado: job `parse_args` manualmente ([S1-02](s1-02-glue-job.md)).
 
 ---
 
@@ -181,18 +177,24 @@ aws s3 cp "s3://$BUCKET/metrics/$ref/metrics.json" -
 | `metrics.json` | Campos `rmse`, `mae`, `"random_state": 42`, `"test_size": 0.2` |
 | RMSE típico | ~600–650 para `2011-06-01` (varia levemente) |
 
-### Passo 3 — Predições (sample)
-
-Até existir job de inferência em produção, use o script de sample:
+### Passo 3 — S3-03: inferência (predições)
 
 ```powershell
-python scripts/generate_sample_predictions.py --s3_input_path $raw --ref_date $ref
+$runPred = aws glue start-job-run `
+  --job-name glue-b3-dev-glue-job-predict-xgboost `
+  --arguments "{`"--ref_date`":`"$ref`",`"--s3_input_path`":`"$raw`"}" `
+  --query JobRunId --output text
+
+Wait-GlueJob -JobName glue-b3-dev-glue-job-predict-xgboost -RunId $runPred
+aws s3 ls "s3://$BUCKET/models/$ref/"
 aws s3 ls "s3://$BUCKET/predictions/ref_date=$ref/"
 ```
 
 | Verificação | Esperado |
 |-------------|----------|
+| `model.pkl` | `models/2011-06-01/model.pkl` (S3-02) |
 | Parquet | `predictions/ref_date=2011-06-01/predictions.parquet` |
+| Schema | `dteday`, `cnt_real`, `cnt_pred`; `cnt_pred` ≥ 0 |
 
 ### Passo 4 — S4-01: Glue Catalog
 
@@ -309,7 +311,7 @@ Use esta lista antes de merge ou demo:
 | Schema inválido | Corromper coluna em `day.csv` (dev only) | Job S2 `FAILED` |
 | `ref_date` sem dados | `--ref_date 2099-01-01` | Job S2 ou S3 `FAILED` ou parquet vazio |
 | Treino sem features | Pular passo S2 | Job S3 `FAILED` |
-| Catalog sem parquet | Pular sample predictions | Job S4-01 falha ou partição vazia |
+| Catalog sem parquet | Pular job predict | Job S4-01 falha ou partição vazia |
 | Falha Glue + alarme | Args inválidos no train job | Métrica `GlueJobFailure`; alarme falha Glue |
 
 Logs: CloudWatch → Log groups → `/aws-glue/python-jobs`.

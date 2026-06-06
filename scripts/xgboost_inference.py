@@ -1,8 +1,7 @@
 """
-Utilitário dev legado — preferir job Glue predict-xgboost (S3-03).
+S3-03 — Inferência XGBoost: predições mensais a partir de model.pkl.
 
-Para testes locais com model.pkl já no S3, use xgboost_inference.generate_predictions_parquet.
-Este módulo treina in-memory (comportamento antigo do sample).
+Gera predictions.parquet com dteday, cnt_real, cnt_pred para registro no Glue Catalog.
 """
 
 from __future__ import annotations
@@ -13,32 +12,36 @@ import numpy as np
 import pandas as pd
 
 from glue_catalog_predictions import predictions_parquet_uri
-from schema_validation import (
-    TARGET_COLUMN,
-    DATE_COLUMN,
-    features_parquet_uri,
-    process_day_csv,
-)
+from schema_validation import DATE_COLUMN, TARGET_COLUMN, features_parquet_uri, process_day_csv
 from xgboost_training import (
-    build_xgboost_regressor,
+    load_model_joblib,
+    model_pkl_uri,
     read_features_parquet,
+    s3_object_exists,
     split_features_target,
 )
 
 logger = logging.getLogger(__name__)
 
 
-def generate_sample_predictions_parquet(s3_input_path: str, ref_date: str) -> str:
+def generate_predictions_parquet(s3_input_path: str, ref_date: str) -> str:
     """
     Gera s3://{bucket}/predictions/ref_date={ref_date}/predictions.parquet.
 
     Pré-requisitos:
-      - raw/day.csv no S3
-      - features/{ref_date}/features.parquet (job validate_day_csv)
+      - features/{ref_date}/features.parquet (S2)
+      - models/{ref_date}/model.pkl (S3-02)
 
     Returns:
         URI S3 do Parquet gravado.
     """
+    model_uri = model_pkl_uri(s3_input_path, ref_date)
+    if not s3_object_exists(model_uri):
+        raise ValueError(
+            f"Modelo nao encontrado em {model_uri}. "
+            "Execute o job train-xgboost antes da inferencia."
+        )
+
     filtered = process_day_csv(s3_input_path, ref_date)
     if filtered is None or filtered.empty:
         raise ValueError(
@@ -48,7 +51,7 @@ def generate_sample_predictions_parquet(s3_input_path: str, ref_date: str) -> st
 
     features_uri = features_parquet_uri(s3_input_path, ref_date)
     features_df = read_features_parquet(features_uri)
-    x, y = split_features_target(features_df)
+    x, _y = split_features_target(features_df)
 
     if len(filtered) != len(features_df):
         raise ValueError(
@@ -56,9 +59,8 @@ def generate_sample_predictions_parquet(s3_input_path: str, ref_date: str) -> st
             f"features={len(features_df)}. Regere features para {ref_date}."
         )
 
-    model = build_xgboost_regressor()
-    model.fit(x, y)
-    cnt_pred = model.predict(x)
+    model = load_model_joblib(model_uri)
+    cnt_pred = np.maximum(model.predict(x), 0.0)
 
     output = pd.DataFrame(
         {
@@ -71,8 +73,9 @@ def generate_sample_predictions_parquet(s3_input_path: str, ref_date: str) -> st
     output_uri = predictions_parquet_uri(s3_input_path, ref_date)
     output.to_parquet(output_uri, engine="pyarrow", index=False)
     logger.info(
-        "Sample predictions salvas em %s (shape=%s)",
+        "Predicoes salvas em %s (shape=%s, model=%s)",
         output_uri,
         output.shape,
+        model_uri,
     )
     return output_uri

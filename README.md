@@ -174,11 +174,13 @@ O dataset de Bike Sharing tem **sazonalidade** (temperatura, estação do ano, d
 | S2-02 | Filtrar por `ref_date` (mês/ano de `dteday`) | ✅ |
 | S2-03 | Salvar Parquet em `features/{ref_date}/features.parquet` | ✅ |
 
-### Sprint 3 — Treino do modelo
+### Sprint 3 — Treino e inferência do modelo
 
 | Story | Entrega | Status |
 |-------|---------|--------|
 | S3-01 | XGBRegressor, split 80/20 (`random_state=42`), RMSE/MAE no CloudWatch e `metrics/{ref_date}/metrics.json` | ✅ |
+| S3-02 | Serializar modelo em `models/{ref_date}/model.pkl` (joblib); reutilizar se existir | ✅ |
+| S3-03 | Job `predict-xgboost` → `predictions/ref_date={ref_date}/predictions.parquet` | ✅ |
 
 ### Sprint 4 — Catalog e Athena
 
@@ -186,9 +188,9 @@ O dataset de Bike Sharing tem **sazonalidade** (temperatura, estação do ano, d
 |-------|---------|--------|
 | S4-01 | Tabela `bike_sharing.predictions` no Glue Catalog, partição `ref_date`, schema do Parquet | ✅ |
 | S4-02 | Query Athena (`dteday`, `cnt_real`, `cnt_pred`, `abs_error`) + Step Functions parametrizável | ✅ |
-| S4-03 | Alarmes CloudWatch (falha Glue + RMSE > threshold), SNS, dashboard, SFN `train-with-observability` | ✅ |
+| S4-03 | Alarmes CloudWatch (falha Glue + RMSE > threshold), SNS, SFN `train-with-observability` | ✅ |
 
-Próximas stories: job de inferência em produção, serializar modelo em `models/`, encadear jobs no Step Functions mensal.
+**Pipeline mensal (`sfn-monthly-pipeline`):** encadeia S2 → treino → inferência → catalog → Athena automaticamente no dia 1 de cada mês.
 
 ## Início rápido
 
@@ -208,11 +210,12 @@ terraform apply -var-file="terraform.tfvars"
 pip install -r requirements-dev.txt
 python -m pytest tests/ -v
 
-# 5. Testar o pipeline (Step Functions)
+# 5. Testar o pipeline completo (Step Functions)
 $SFN = terraform output -raw sfn_monthly_pipeline_arn
 aws stepfunctions start-execution `
   --state-machine-arn $SFN `
-  --name "test-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+  --name "test-$(Get-Date -Format 'yyyyMMdd-HHmmss')" `
+  --input '{"ref_date":"2011-06-01"}'
 ```
 
 ## Executar Glue Jobs manualmente (PowerShell)
@@ -233,6 +236,11 @@ aws glue start-job-run `
 # S3 — treinar XGBoost (requer features.parquet do passo anterior)
 aws glue start-job-run `
   --job-name glue-b3-dev-glue-job-train-xgboost `
+  --arguments "{`"--ref_date`":`"$ref`",`"--s3_input_path`":`"s3://$bucket/raw/day.csv`"}"
+
+# S3-03 — inferência (requer model.pkl do treino)
+aws glue start-job-run `
+  --job-name glue-b3-dev-glue-job-predict-xgboost `
   --arguments "{`"--ref_date`":`"$ref`",`"--s3_input_path`":`"s3://$bucket/raw/day.csv`"}"
 ```
 
@@ -289,12 +297,13 @@ $raw    = "s3://$bucket/raw/day.csv"
 aws glue start-job-run --job-name glue-b3-dev-glue-job-validate-day-csv `
   --arguments "{`"--ref_date`":`"$ref`",`"--s3_input_path`":`"$raw`"}"
 
-# S3 — treino + métricas
+# S3 — treino + métricas + model.pkl
 aws glue start-job-run --job-name glue-b3-dev-glue-job-train-xgboost `
   --arguments "{`"--ref_date`":`"$ref`",`"--s3_input_path`":`"$raw`"}"
 
-# Predições (sample até job de inferência)
-python scripts/generate_sample_predictions.py --s3_input_path $raw --ref_date $ref
+# S3-03 — predições (substitui generate_sample_predictions.py)
+aws glue start-job-run --job-name glue-b3-dev-glue-job-predict-xgboost `
+  --arguments "{`"--ref_date`":`"$ref`",`"--s3_input_path`":`"$raw`"}"
 
 # S4-01 — Glue Catalog
 aws glue start-job-run --job-name glue-b3-dev-glue-job-register-predictions-catalog `

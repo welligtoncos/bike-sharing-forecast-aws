@@ -103,6 +103,21 @@ output "glue_job_train_xgboost_arn" {
   value       = aws_glue_job.train_xgboost.arn
 }
 
+output "glue_job_predict_xgboost_name" {
+  description = "Nome do Glue Job de inferencia XGBoost (S3-03)."
+  value       = aws_glue_job.predict_xgboost.name
+}
+
+output "glue_job_predict_xgboost_arn" {
+  description = "ARN do Glue Job de inferencia XGBoost (S3-03)."
+  value       = aws_glue_job.predict_xgboost.arn
+}
+
+output "model_pkl_uri_template" {
+  description = "Template S3 do modelo serializado por ref_date (S3-02)."
+  value       = local.model_pkl_uri_template
+}
+
 output "metrics_json_uri_template" {
   description = "Template S3 das metricas de treino por ref_date (S3-01)."
   value       = local.metrics_json_uri_template

@@ -27,6 +27,7 @@ from typing import Any
 import boto3
 import numpy as np
 import pandas as pd
+from botocore.exceptions import ClientError
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.model_selection import train_test_split
 from xgboost import XGBRegressor
@@ -42,6 +43,7 @@ logger = logging.getLogger(__name__)
 RANDOM_STATE = 42   # Seed fixa — mesmo split em re-execuções
 TEST_SIZE = 0.2     # 20% validação, 80% treino
 METRICS_JSON_NAME = "metrics.json"
+MODEL_PKL_NAME = "model.pkl"
 
 
 # ---------------------------------------------------------------------------
@@ -60,6 +62,82 @@ def metrics_json_uri(s3_input_path: str, ref_date: str) -> str:
 
     bucket = s3_input_path[5:].split("/", 1)[0]
     return f"s3://{bucket}/metrics/{ref_date}/{METRICS_JSON_NAME}"
+
+
+def model_pkl_uri(s3_input_path: str, ref_date: str) -> str:
+    """
+    URI do modelo serializado (S3-02).
+
+    Ex.: s3://bucket/models/2011-06-01/model.pkl
+    """
+    if not s3_input_path.startswith("s3://"):
+        raise ValueError(f"Caminho S3 invalido (esperado s3://...): {s3_input_path}")
+
+    bucket = s3_input_path[5:].split("/", 1)[0]
+    return f"s3://{bucket}/models/{ref_date}/{MODEL_PKL_NAME}"
+
+
+def _parse_s3_uri(s3_uri: str) -> tuple[str, str]:
+    """Quebra s3://bucket/key/path em (bucket, key) para boto3."""
+    path = s3_uri[5:]
+    bucket, key = path.split("/", 1)
+    return bucket, key
+
+
+def s3_object_exists(s3_uri: str) -> bool:
+    """True se o objeto existe no S3 (head_object)."""
+    if not s3_uri.startswith("s3://"):
+        raise ValueError(f"Caminho S3 invalido (esperado s3://...): {s3_uri}")
+
+    bucket, key = _parse_s3_uri(s3_uri)
+    try:
+        boto3.client("s3").head_object(Bucket=bucket, Key=key)
+        return True
+    except ClientError as exc:
+        error_code = exc.response.get("Error", {}).get("Code", "")
+        if error_code in ("404", "NoSuchKey", "NotFound"):
+            return False
+        raise
+
+
+def save_model_joblib(model: XGBRegressor, s3_uri: str) -> None:
+    """Serializa XGBRegressor com joblib e grava no S3 (S3-02)."""
+    import io
+
+    import joblib
+
+    if not s3_uri.startswith("s3://"):
+        raise ValueError(f"Caminho S3 invalido (esperado s3://...): {s3_uri}")
+
+    buffer = io.BytesIO()
+    joblib.dump(model, buffer)
+    buffer.seek(0)
+
+    bucket, key = _parse_s3_uri(s3_uri)
+    boto3.client("s3").put_object(
+        Bucket=bucket,
+        Key=key,
+        Body=buffer.getvalue(),
+        ContentType="application/octet-stream",
+    )
+    logger.info("Modelo salvo em %s", s3_uri)
+
+
+def load_model_joblib(s3_uri: str) -> XGBRegressor:
+    """Carrega XGBRegressor de model.pkl no S3 (S3-02)."""
+    import io
+
+    import joblib
+
+    if not s3_uri.startswith("s3://"):
+        raise ValueError(f"Caminho S3 invalido (esperado s3://...): {s3_uri}")
+
+    bucket, key = _parse_s3_uri(s3_uri)
+    response = boto3.client("s3").get_object(Bucket=bucket, Key=key)
+    buffer = io.BytesIO(response["Body"].read())
+    model = joblib.load(buffer)
+    logger.info("Modelo carregado de %s", s3_uri)
+    return model
 
 
 # ---------------------------------------------------------------------------
@@ -148,13 +226,6 @@ def compute_regression_metrics(y_true: pd.Series, y_pred: np.ndarray) -> dict[st
     return {"rmse": rmse, "mae": mae}
 
 
-def _parse_s3_uri(s3_uri: str) -> tuple[str, str]:
-    """Quebra s3://bucket/key/path em (bucket, key) para boto3 put_object."""
-    path = s3_uri[5:]
-    bucket, key = path.split("/", 1)
-    return bucket, key
-
-
 def save_metrics_json(metrics: dict[str, Any], s3_uri: str) -> None:
     """
     Persiste métricas em JSON no S3 via boto3 (disponível nativamente no Glue).
@@ -185,21 +256,13 @@ def train_and_evaluate(
     *,
     test_size: float = TEST_SIZE,
     random_state: int = RANDOM_STATE,
+    force_retrain: bool = False,
 ) -> dict[str, Any]:
     """
-    Pipeline completo S3-01: leitura → split → treino → avaliação → JSON S3.
+    Pipeline S3-01 + S3-02: leitura → split → treino ou reuse → avaliação → model.pkl + JSON.
 
-    Args:
-        s3_input_path: URI do day.csv (usado só para derivar bucket/paths).
-        ref_date: Partição temporal (features/ e metrics/).
-
-    Returns:
-        Dict com rmse, mae, tamanhos dos conjuntos e URI do metrics.json.
-
-    Raises:
-        ValueError: menos de 2 registros (train_test_split inviável).
+    Se model.pkl existir e force_retrain=False, carrega o modelo e pula fit (reavalia RMSE/MAE).
     """
-    # Deriva path do Parquet a partir do mesmo padrão do S2-03.
     features_uri = features_parquet_uri(s3_input_path, ref_date)
     df = read_features_parquet(features_uri)
     x, y = split_features_target(df)
@@ -216,13 +279,22 @@ def train_and_evaluate(
         random_state=random_state,
     )
 
-    model = build_xgboost_regressor(random_state=random_state)
-    model.fit(x_train, y_train)
+    model_uri = model_pkl_uri(s3_input_path, ref_date)
+    model_reused = False
+
+    if not force_retrain and s3_object_exists(model_uri):
+        model = load_model_joblib(model_uri)
+        model_reused = True
+        logger.info("Modelo reutilizado de %s (treino ignorado)", model_uri)
+    else:
+        model = build_xgboost_regressor(random_state=random_state)
+        model.fit(x_train, y_train)
+        save_model_joblib(model, model_uri)
+        logger.info("Modelo treinado e salvo em %s", model_uri)
 
     y_pred = model.predict(x_val)
     scores = compute_regression_metrics(y_val, y_pred)
 
-    # Critério de aceite: RMSE e MAE visíveis no CloudWatch Logs.
     logger.info("RMSE=%.4f MAE=%.4f", scores["rmse"], scores["mae"])
 
     metrics: dict[str, Any] = {
@@ -233,6 +305,8 @@ def train_and_evaluate(
         "n_samples": len(x),
         "n_train": len(x_train),
         "n_val": len(x_val),
+        "model_pkl": model_uri,
+        "model_reused": model_reused,
         **scores,
     }
 
@@ -251,6 +325,7 @@ def train_and_evaluate_with_observability(
     random_state: int = RANDOM_STATE,
     rmse_threshold: float | None = None,
     cloudwatch_namespace: str | None = None,
+    force_retrain: bool = False,
 ) -> dict[str, Any]:
     """
     S3-01 + S4-03: treino, metricas S3 e publicacao RMSE/MAE no CloudWatch.
@@ -262,6 +337,7 @@ def train_and_evaluate_with_observability(
         ref_date,
         test_size=test_size,
         random_state=random_state,
+        force_retrain=force_retrain,
     )
 
     namespace = cloudwatch_namespace or DEFAULT_NAMESPACE

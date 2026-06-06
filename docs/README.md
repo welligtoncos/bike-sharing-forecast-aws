@@ -32,21 +32,17 @@
 
 ### Backlog vs. implementação
 
-O arquivo [pipeline_xgboost_sprints.xlsx](pipeline_xgboost_sprints.xlsx) acompanha o backlog (user stories, prompts, critérios de aceite). **Status atualizado em 2026-06-06:**
+O arquivo [pipeline_xgboost_sprints.xlsx](pipeline_xgboost_sprints.xlsx) reflete o backlog **S1–S4 concluído** (atualizado 2026-06-06).
 
 | Story | Status |
 |-------|--------|
-| S1-01 … S1-03 | Concluído |
-| S2-01 … S2-03 | Concluído |
-| S3-01 | Concluído |
-| S3-02, S3-03 | Pendente |
-| S4-01 … S4-03 | Concluído |
+| S1-01 … S4-03 | Concluído |
 
-| Sprint | Status no Excel |
-|--------|-----------------|
+| Sprint | Status |
+|--------|--------|
 | Sprint 1 — Infra | Concluído |
 | Sprint 2 — Features | Concluído |
-| Sprint 3 — Modelo | Em andamento |
+| Sprint 3 — Modelo | Concluído |
 | Sprint 4 — Lake Formation | Concluído |
 
 ## Convenção de nomenclatura

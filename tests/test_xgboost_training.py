@@ -182,9 +182,11 @@ def test_save_metrics_json_writes_to_s3(mock_boto_client) -> None:
 # Orquestração train_and_evaluate
 # ---------------------------------------------------------------------------
 
+@patch("xgboost_training.save_model_joblib")
+@patch("xgboost_training.s3_object_exists", return_value=False)
 @patch("xgboost_training.save_metrics_json")
 @patch("xgboost_training.read_features_parquet")
-def test_train_and_evaluate_end_to_end(mock_read, mock_save) -> None:
+def test_train_and_evaluate_end_to_end(mock_read, mock_save, _mock_exists, _mock_save_model) -> None:
     """Fluxo completo: treino real + métricas + URI de saída."""
     pytest.importorskip("xgboost")
     mock_read.return_value = _features_frame(30)
@@ -205,11 +207,15 @@ def test_train_and_evaluate_end_to_end(mock_read, mock_save) -> None:
     assert metrics["rmse"] >= 0.0
     assert metrics["mae"] >= 0.0
     assert metrics["metrics_json"] == "s3://my-bucket/metrics/2011-06-01/metrics.json"
+    assert metrics["model_reused"] is False
+    assert "model.pkl" in metrics["model_pkl"]
     mock_save.assert_called_once()
 
 
+@patch("xgboost_training.save_model_joblib")
+@patch("xgboost_training.s3_object_exists", return_value=False)
 @patch("xgboost_training.read_features_parquet")
-def test_train_and_evaluate_logs_rmse_mae(mock_read, caplog) -> None:
+def test_train_and_evaluate_logs_rmse_mae(mock_read, _mock_exists, _mock_save_model, caplog) -> None:
     """Critério S3-01: RMSE e MAE aparecem no log CloudWatch."""
     pytest.importorskip("xgboost")
     mock_read.return_value = _features_frame(25)

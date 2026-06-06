@@ -41,11 +41,13 @@ def main() -> None:
     ref_date = args["ref_date"]
     rmse_threshold = parse_rmse_threshold(_optional_arg("rmse_threshold"))
     namespace = _optional_arg("cloudwatch_namespace") or DEFAULT_NAMESPACE
+    force_retrain = (_optional_arg("force_retrain") or "false").lower() in ("1", "true", "yes")
 
     logger.info("s3_input_path=%s", s3_input_path)
     logger.info("ref_date=%s", ref_date)
     logger.info("rmse_threshold=%s", rmse_threshold)
     logger.info("cloudwatch_namespace=%s", namespace)
+    logger.info("force_retrain=%s", force_retrain)
 
     try:
         metrics = train_and_evaluate_with_observability(
@@ -53,6 +55,7 @@ def main() -> None:
             ref_date,
             rmse_threshold=rmse_threshold,
             cloudwatch_namespace=namespace,
+            force_retrain=force_retrain,
         )
     except Exception:
         publish_glue_job_failure(
@@ -67,6 +70,8 @@ def main() -> None:
     print(f"rmse: {metrics['rmse']:.4f}")
     print(f"mae: {metrics['mae']:.4f}")
     print(f"rmse_threshold_breached: {metrics['rmse_threshold_breached']}")
+    print(f"model_reused: {metrics['model_reused']}")
+    print(f"model_pkl: {metrics['model_pkl']}")
     print(f"metrics_json: {metrics['metrics_json']}")
 
 

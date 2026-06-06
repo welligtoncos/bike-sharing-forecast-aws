@@ -72,7 +72,7 @@ resource "aws_glue_job" "train_xgboost" {
       "s3://${aws_s3_bucket.pipeline.id}/${local.glue_module_pipeline_observability_key}",
     ])
     # xgboost/scikit-learn instalados no cold start; pyarrow/s3fs para Parquet S3.
-    "--additional-python-modules" = "s3fs,pyarrow,xgboost,scikit-learn"
+    "--additional-python-modules" = "s3fs,pyarrow,xgboost,scikit-learn,joblib"
     "--s3_input_path"               = local.s3_input_day_csv_path
     "--ref_date"                    = "1970-01-01"
     "--rmse_threshold"              = tostring(var.rmse_threshold)

@@ -44,6 +44,13 @@ locals {
   glue_script_train_xgboost_key      = "scripts/train_xgboost_job.py"
   glue_module_xgboost_training_key   = "scripts/xgboost_training.py"
 
+  # S3-03 — Glue Job inferência XGBoost
+  glue_job_predict_xgboost_name      = "${local.name_prefix}-glue-job-predict-xgboost"
+  glue_script_predict_xgboost_key    = "scripts/predict_xgboost_job.py"
+  glue_module_xgboost_inference_key  = "scripts/xgboost_inference.py"
+
+  model_pkl_uri_template             = "s3://${local.s3_bucket_name}/models/{ref_date}/model.pkl"
+
   # S4-01 — Glue Catalog predictions (bike_sharing)
   glue_job_register_predictions_catalog_name   = "${local.name_prefix}-glue-job-register-predictions-catalog"
   glue_script_register_predictions_catalog_key = "scripts/register_predictions_catalog_job.py"

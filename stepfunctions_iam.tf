@@ -41,7 +41,10 @@ resource "aws_iam_role_policy" "stepfunctions_glue_sns" {
         ]
         Resource = [
           aws_glue_job.parse_args.arn,
+          aws_glue_job.validate_day_csv.arn,
           aws_glue_job.train_xgboost.arn,
+          aws_glue_job.predict_xgboost.arn,
+          aws_glue_job.register_predictions_catalog.arn,
         ]
       },
       {

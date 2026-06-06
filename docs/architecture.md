@@ -118,9 +118,9 @@ flowchart LR
 1. CSV bruto      → s3://{bucket}/raw/day.csv
 2. Features       → s3://{bucket}/features/{ref_date}/features.parquet        ✅ S2-03
 3. Métricas       → s3://{bucket}/metrics/{ref_date}/metrics.json              ✅ S3-01
-4. Predições      → s3://{bucket}/predictions/ref_date={ref_date}/predictions.parquet  ✅ S4 (sample)
+4. Predições      → s3://{bucket}/predictions/ref_date={ref_date}/predictions.parquet  ✅ S3-03
 5. Resultados SQL → s3://{bucket}/athena-results/                              ✅ S4-02
-6. Modelo         → s3://{bucket}/models/                                      (futuro)
+6. Modelo         → s3://{bucket}/models/{ref_date}/model.pkl                  ✅ S3-02
 ```
 
 ## Recursos AWS
@@ -131,6 +131,7 @@ flowchart LR
 | Glue Job parse_args | `aws_glue_job.parse_args` | `glue-b3-dev-glue-job-parse-args` |
 | Glue Job features | `aws_glue_job.validate_day_csv` | `glue-b3-dev-glue-job-validate-day-csv` |
 | Glue Job treino | `aws_glue_job.train_xgboost` | `glue-b3-dev-glue-job-train-xgboost` |
+| Glue Job inferencia | `aws_glue_job.predict_xgboost` | `glue-b3-dev-glue-job-predict-xgboost` |
 | Glue Job catalog | `aws_glue_job.register_predictions_catalog` | `glue-b3-dev-glue-job-register-predictions-catalog` |
 | Glue Database | `aws_glue_catalog_database.bike_sharing` | `bike_sharing` |
 | Athena Workgroup | `aws_athena_workgroup.pipeline` | `glue-b3-dev-athena-pipeline` |
@@ -165,9 +166,8 @@ flowchart LR
 
 | State machine | Uso | Input |
 |---------------|-----|-------|
-| `monthly_pipeline` | Disparo mensal Glue parse_args | (automático via EventBridge) |
+| `monthly_pipeline` | S2→S3→inferência→catalog→Athena | `{"ref_date":"2011-06-01"}` (opcional; default = mês corrente) |
 | `validate_predictions` | Query Athena parametrizada | `{"ref_date":"2011-06-01"}` |
+| `train_with_observability` | Treino + inferência + rmse_threshold | `{"ref_date":"2011-06-01","rmse_threshold":500}` |
 
-Jobs Glue (S2–S4) rodam manualmente ou serão encadeados no `monthly_pipeline` nas próximas stories.
-
-Ver [S1-03 — Step Functions](s1-03-step-functions.md), [S4-01](s4-01-glue-catalog.md) e [S4-02](s4-02-athena-query.md).
+Ver [S1-03 — Step Functions](s1-03-step-functions.md), [Guia de testes](pipeline-testing-guide.md) e [S4-02](s4-02-athena-query.md).
