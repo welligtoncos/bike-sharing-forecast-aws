@@ -92,3 +92,18 @@ output "features_parquet_uri_template" {
   description = "Template S3 das features Parquet particionadas por ref_date (S2-03)."
   value       = local.features_parquet_uri_template
 }
+
+output "glue_job_train_xgboost_name" {
+  description = "Nome do Glue Job de treino XGBoost (S3-01)."
+  value       = aws_glue_job.train_xgboost.name
+}
+
+output "glue_job_train_xgboost_arn" {
+  description = "ARN do Glue Job de treino XGBoost (S3-01)."
+  value       = aws_glue_job.train_xgboost.arn
+}
+
+output "metrics_json_uri_template" {
+  description = "Template S3 das metricas de treino por ref_date (S3-01)."
+  value       = local.metrics_json_uri_template
+}

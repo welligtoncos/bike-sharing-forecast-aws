@@ -38,9 +38,10 @@ resource "aws_glue_job" "parse_args" {
 
   default_arguments = {
     "--job-language"                     = "python"
-    "--enable-continuous-cloudwatch-log" = "true"
-    "--ref_date"                         = "1970-01-01"
-    "--s3_input_path"                    = "s3://${aws_s3_bucket.pipeline.id}/raw/"
+    "--enable-continuous-cloudwatch-log" = "true" # Logs no CloudWatch (/aws-glue/python-jobs)
+    # Valores padrão — Step Functions sobrescreve via JobRun Arguments.
+    "--ref_date"      = "1970-01-01"
+    "--s3_input_path" = "s3://${aws_s3_bucket.pipeline.id}/raw/"
   }
 
   tags = {

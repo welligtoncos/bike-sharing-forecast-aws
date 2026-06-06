@@ -22,6 +22,7 @@ locals {
   s3_folders = toset([
     "raw/",          # CSV original (ex.: ibovespa_stocks.csv)
     "features/",     # parquet/csv pos feature engineering
+    "metrics/",      # metricas de treino (RMSE, MAE) por ref_date
     "predictions/",  # resultados inferencia do modelo
     "models/",       # artefatos do modelo treinado
   ])
@@ -36,6 +37,11 @@ locals {
   glue_job_validate_day_csv_name   = "${local.name_prefix}-glue-job-validate-day-csv"
   glue_script_validate_day_csv_key = "scripts/validate_day_csv_job.py"
   glue_module_schema_validation_key = "scripts/schema_validation.py"
+
+  # S3-01 — Glue Job treino XGBoost
+  glue_job_train_xgboost_name        = "${local.name_prefix}-glue-job-train-xgboost"
+  glue_script_train_xgboost_key      = "scripts/train_xgboost_job.py"
+  glue_module_xgboost_training_key   = "scripts/xgboost_training.py"
 
   glue_catalog_arn  = "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:catalog"
   glue_database_arn = "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:database/${var.glue_db_name}"
@@ -57,4 +63,5 @@ locals {
   sns_topic_arn = var.sns_pipeline_alerts_arn != "" ? var.sns_pipeline_alerts_arn : "arn:aws:sns:${var.aws_region}:${var.aws_account_id}:${local.sns_pipeline_alerts_name}"
 
   features_parquet_uri_template = "s3://${local.s3_bucket_name}/features/{ref_date}/features.parquet"
+  metrics_json_uri_template     = "s3://${local.s3_bucket_name}/metrics/{ref_date}/metrics.json"
 }
