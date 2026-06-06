@@ -1,67 +1,87 @@
 # Arquitetura
 
-Visão geral da infraestrutura provisionada pelo Terraform neste repositório.
+Visão geral da infraestrutura e do fluxo de dados do pipeline.
 
-## Diagrama de componentes
+## Diagrama end-to-end
 
 ```mermaid
 flowchart TB
-    subgraph Orquestracao["Orquestração"]
-        EB[EventBridge<br/>dia 1 / mes]
+    subgraph AGENDAMENTO["Agendamento · S1-03 ✅"]
+        EB[EventBridge<br/>cron dia 1 / mês]
+    end
+
+    subgraph ORQUESTRACAO["Orquestração · S1-03 ✅"]
         SF[Step Functions]
-        SNS[SNS Alerts]
+        SNS[SNS alertas falha]
     end
 
-    subgraph Compute["Compute"]
-        GJ[Glue Job Python Shell<br/>parse_args_job.py]
+    subgraph COMPUTE["Glue Python Shell"]
+        GJ1[parse_args_job<br/>S1-02 ✅]
+        GJ2[validate_day_csv_job<br/>S2 ✅]
     end
 
-    subgraph Storage["Armazenamento"]
-        S3[(S3 Bucket pipeline)]
-        RAW[raw/]
-        FEAT[features/]
+    subgraph S3["S3 pipeline · S1-01 ✅"]
+        RAW[raw/day.csv]
+        FEAT["features/{ref_date}/features.parquet"]
         PRED[predictions/]
         MOD[models/]
-        SCR[scripts/]
     end
 
-    subgraph Security["Segurança"]
-        ROLE[IAM Role<br/>glue-b3-dev-iam-glue]
+    subgraph FUTURO["Futuro"]
+        GC[Glue Catalog]
+        ATH[Athena]
     end
 
-    subgraph Observability["Observabilidade"]
-        CW[CloudWatch Logs<br/>/aws-glue/python-jobs]
-    end
+    EB --> SF
+    SF -->|startJobRun.sync| GJ1
+    SF -.->|falha| SNS
 
-    subgraph Catalog["Catálogo (futuro)"]
-        GC[Glue Data Catalog<br/>database b3_raw]
-    end
+    RAW -->|read_csv| GJ2
+    GJ2 -->|validate + filter + parquet| FEAT
 
-    SF -->|"falha"| SNS
-    EB -->|"cron mensal"| SF
-    SF -->|"StartJobRun<br/>--ref_date, --s3_input_path"| GJ
-    GJ --> ROLE
-    ROLE --> S3
-    ROLE --> GC
-    GJ --> CW
-    S3 --> RAW
-    S3 --> FEAT
-    S3 --> PRED
-    S3 --> MOD
-    S3 --> SCR
-    SCR -.->|script fonte| GJ
+    GJ1 --> RAW
+    FEAT --> GC
+    PRED --> GC
+    GC --> ATH
+
+    classDef done fill:#d4edda,stroke:#28a745,color:#155724
+    classDef future fill:#fff3cd,stroke:#ffc107,color:#856404
+    class EB,SF,GJ1,GJ2,RAW,FEAT,SNS done
+    class PRED,MOD,GC,ATH future
 ```
 
-## Fluxo de dados previsto
+## Pipeline de features (Sprint 2)
+
+```mermaid
+flowchart LR
+    IN["s3://bucket/raw/day.csv"] --> V["S2-01<br/>validate_schema"]
+    V --> F["S2-02<br/>filter_by_ref_date"]
+    F --> S["select_feature_columns"]
+    S --> OUT["S2-03<br/>features/{ref_date}/features.parquet"]
+
+    style IN fill:#d4edda
+    style V fill:#d4edda
+    style F fill:#d4edda
+    style S fill:#d4edda
+    style OUT fill:#d4edda
+```
+
+| Passo | Módulo | Colunas / artefato |
+|-------|--------|-------------------|
+| Entrada | `read_day_csv_from_s3` | CSV completo com `dteday` |
+| Validação | `validate_schema` | `season`, `temp`, `hum`, `windspeed`, `weekday`, `cnt`, `dteday` |
+| Filtro | `filter_by_ref_date` | registros do mês/ano de `ref_date` |
+| Seleção | `select_feature_columns` | features + target (`cnt`) |
+| Saída | `save_features_parquet` | Parquet via pandas + pyarrow |
+
+## Fluxo de dados no S3
 
 ```
-1. CSV bruto          → s3://{bucket}/raw/
-2. Feature engineering → s3://{bucket}/features/
-3. Modelo treinado     → s3://{bucket}/models/
-4. Previsões           → s3://{bucket}/predictions/
+1. CSV bruto     → s3://{bucket}/raw/day.csv
+2. Features      → s3://{bucket}/features/{ref_date}/features.parquet   ✅ S2-03
+3. Modelo        → s3://{bucket}/models/                               (futuro)
+4. Previsões     → s3://{bucket}/predictions/                           (futuro)
 ```
-
-O Glue Job S1-02 é o **primeiro job** do pipeline: recebe a data de referência e o caminho S3 de entrada via argumentos, preparando a integração com Step Functions nas stories seguintes.
 
 ## Recursos AWS
 
@@ -69,72 +89,46 @@ O Glue Job S1-02 é o **primeiro job** do pipeline: recebe a data de referência
 |---------|-----------|------------|
 | S3 Bucket | `aws_s3_bucket.pipeline` | `glue-b3-dev-s3-pipeline-{account}` |
 | S3 Versioning | `aws_s3_bucket_versioning.pipeline` | Enabled |
-| S3 Public Access Block | `aws_s3_bucket_public_access_block.pipeline` | Bloqueio total |
-| S3 Folders | `aws_s3_object.folders` | `raw/`, `features/`, `predictions/`, `models/` |
-| S3 Script | `aws_s3_object.glue_script_parse_args` | `scripts/parse_args_job.py` |
-| IAM Role | `aws_iam_role.glue` | `glue-b3-dev-iam-glue` |
-| IAM Policy S3 | `aws_iam_role_policy.glue_s3` | List/Get/Put/Delete no bucket |
-| IAM Policy Catalog | `aws_iam_role_policy.glue_catalog` | Leitura Glue Catalog `b3_raw` |
-| IAM Policy Logs | `aws_iam_role_policy.glue_logs` | Escrita em `/aws-glue/python-jobs` |
-| Glue Job | `aws_glue_job.parse_args` | `glue-b3-dev-glue-job-parse-args` |
+| Glue Job (args) | `aws_glue_job.parse_args` | `glue-b3-dev-glue-job-parse-args` |
+| Glue Job (features) | `aws_glue_job.validate_day_csv` | `glue-b3-dev-glue-job-validate-day-csv` |
+| State Machine | `aws_sfn_state_machine.monthly_pipeline` | `glue-b3-dev-sfn-monthly-pipeline` |
+| EventBridge | `aws_cloudwatch_event_rule.monthly_pipeline` | cron dia 1 |
+| SNS | `aws_sns_topic.pipeline_alerts` | alertas de falha |
+| IAM Role Glue | `aws_iam_role.glue` | `glue-b3-dev-iam-glue` |
+| IAM Role SFN | `aws_iam_role.stepfunctions` | Step Functions + Glue + SNS |
 
-## IAM — quem acessa o quê
+Scripts S3: `scripts/parse_args_job.py`, `scripts/validate_day_csv_job.py`, `scripts/schema_validation.py`
+
+## IAM — Glue
 
 ```mermaid
 flowchart LR
     GLUE[glue.amazonaws.com] -->|AssumeRole| ROLE[glue-b3-dev-iam-glue]
 
-    ROLE --> P1[AWSGlueServiceRole<br/>managed policy]
-    ROLE --> P2[glue-s3<br/>bucket pipeline]
-    ROLE --> P3[glue-catalog<br/>database b3_raw]
-    ROLE --> P4[glue-logs<br/>CloudWatch]
+    ROLE --> P1[AWSGlueServiceRole]
+    ROLE --> P2[glue-s3]
+    ROLE --> P3[glue-catalog]
+    ROLE --> P4[glue-logs]
 ```
 
-| Policy | Escopo | Finalidade |
-|--------|--------|------------|
-| `AWSGlueServiceRole` | AWS managed | Operações padrão Glue |
-| `glue-s3` | Bucket pipeline | Ler/gravar CSVs, modelos, scripts |
-| `glue-catalog` | Database `b3_raw` | Consultar tabelas e partições |
-| `glue-logs` | `/aws-glue/python-jobs` | Registrar stdout e logs do job |
+| Policy | Finalidade |
+|--------|------------|
+| `glue-s3` | Ler `raw/`, gravar `features/`, `models/`, `predictions/` |
+| `glue-catalog` | Leitura database `b3_raw` (futuro crawler) |
+| `glue-logs` | CloudWatch `/aws-glue/python-jobs` |
 
-## Arquivos Terraform por domínio
+## Integração Step Functions
 
-| Arquivo | Responsabilidade |
-|---------|------------------|
-| `main.tf` | Provider AWS, bucket S3, versionamento, pastas |
-| `iam.tf` | Role e policies do Glue |
-| `glue.tf` | Upload do script + definição do Glue Job |
-| `locals.tf` | Nomenclatura centralizada |
-| `variables.tf` | Entrada configurável |
-| `outputs.tf` | Valores para scripts e integrações |
-
-## Tags padrão
-
-Aplicadas via `default_tags` no provider:
-
-```
-Project     = glue-b3
-Environment = dev
-ManagedBy   = terraform
-Name        = <nome-do-recurso>
-```
-
-## Integração Step Functions (visão futura)
-
-O Step Functions invocará o Glue Job passando argumentos dinâmicos:
+Hoje o Step Functions invoca `parse_args_job` (S1-02). O job de features (`validate_day_csv`) roda manualmente ou será encadeado nas próximas stories:
 
 ```json
 {
-  "Type": "Task",
-  "Resource": "arn:aws:states:::glue:startJobRun.sync",
-  "Parameters": {
-    "JobName": "glue-b3-dev-glue-job-parse-args",
-    "Arguments": {
-      "--ref_date.$": "$.ref_date",
-      "--s3_input_path.$": "$.s3_input_path"
-    }
+  "JobName": "glue-b3-dev-glue-job-validate-day-csv",
+  "Arguments": {
+    "--s3_input_path": "s3://bucket/raw/day.csv",
+    "--ref_date": "2011-06-01"
   }
 }
 ```
 
-Detalhes em [S1-02 — Glue Job](s1-02-glue-job.md).
+Ver [S1-03 — Step Functions](s1-03-step-functions.md) e scripts em `scripts/`.
