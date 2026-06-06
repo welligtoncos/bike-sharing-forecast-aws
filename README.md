@@ -208,11 +208,18 @@ Copy-Item terraform.tfvars.example terraform.tfvars
 terraform init
 terraform apply -var-file="terraform.tfvars"
 
-# 4. Testes locais
+# 4. Testes locais (unitários + modelo completo offline)
 pip install -r requirements-dev.txt
 python -m pytest tests/ -v
 
-# 5. Testar o pipeline completo (Step Functions)
+# 4b. Modelo completo nos 24 meses (~2 min, sem Glue/SFN)
+$bucket = terraform output -raw s3_bucket_name   # ou use data/day.csv local
+python scripts/simulate_monthly_evolution.py `
+  --input-path "s3://$bucket/raw/day.csv" --mode both --output evolution_report.csv
+python scripts/plot_evolution_report.py
+# Ver docs/pipeline-testing-guide.md — Fase 1B
+
+# 5. Testar o pipeline completo na AWS (Step Functions)
 $SFN = terraform output -raw sfn_monthly_pipeline_arn
 aws stepfunctions start-execution `
   --state-machine-arn $SFN `
@@ -326,7 +333,7 @@ Query SQL direta (Athena console ou CLI): ver [S4-02 — Query Athena](docs/s4-0
 | [Getting Started](docs/getting-started.md) | Pré-requisitos, deploy, validação |
 | [Arquitetura](docs/architecture.md) | Fluxo de dados, recursos AWS, IAM |
 | [**Guia do usuário — dataset e modelo**](docs/guia-usuario-modelo.md) | Dataset Bike Sharing, tabelas Athena, como testar e usar predições |
-| [**Guia de testes da esteira**](docs/pipeline-testing-guide.md) | Como devs validam S2→S4, pytest, checklist |
+| [**Guia de testes da esteira**](docs/pipeline-testing-guide.md) | Devs: pytest, **teste local completo (24 meses)**, S2→S4 na AWS, checklist |
 | [**Casos de uso comerciais**](docs/commercial-use-cases.md) | Cenários de negócio e como adaptar o pipeline |
 | [S1-01 — Bucket S3](docs/s1-01-s3-bucket.md) | Estrutura de pastas e versionamento |
 | [S1-02 — Glue Job](docs/s1-02-glue-job.md) | Argumentos, execução, logs |

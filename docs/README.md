@@ -10,7 +10,7 @@
 | [Getting Started](getting-started.md) | Configurar, aplicar Terraform e validar o pipeline |
 | [Arquitetura](architecture.md) | Componentes, fluxo S1–S4, IAM, S3 |
 | [**Guia do usuário — dataset e modelo**](guia-usuario-modelo.md) | Analistas/negócio: dataset, tabelas, Athena, como testar predições |
-| [**Guia de testes da esteira**](pipeline-testing-guide.md) | Onboarding de devs: pytest, S2→S4, checklist, troubleshooting |
+| [**Guia de testes da esteira**](pipeline-testing-guide.md) | Devs: pytest, **teste local completo do modelo**, S2→S4 na AWS, checklist |
 | [**Casos de uso comerciais**](commercial-use-cases.md) | Cenários de negócio, adaptação e proposta de valor |
 
 ## Sprint 1 — Infraestrutura

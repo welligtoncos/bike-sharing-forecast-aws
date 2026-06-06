@@ -26,3 +26,6 @@ __pycache__/
 .venv/
 venv/
 args.json
+evolution_report.csv
+evolution_report.png
+evolution_report.xlsx

@@ -64,21 +64,169 @@ pip install -r requirements-dev.txt
 
 ## Fase 1 — Testes locais (sem AWS)
 
-Rode antes de qualquer deploy ou após alterar scripts Python:
+Execute **antes** de `terraform apply`, após alterar scripts Python ou antes de abrir PR. Não exige infra provisionada (exceto se optar por ler `day.csv` do S3).
+
+### Visão geral
+
+| Etapa | Comando | Tempo | O que valida |
+|-------|---------|-------|--------------|
+| **1A** Unitários | `pytest tests/ -v` | ~30 s | Funções S2–S4 isoladas (mocks) |
+| **1B** Modelo completo | `simulate_monthly_evolution.py` + `plot_evolution_report.py` | ~2 min | S2+S3 nos **24 meses** do dataset |
+| **1C** (opcional) Um mês | `--mode pipeline` + inspecionar CSV | ~10 s | Comportamento igual à esteira AWS para um `ref_date` |
+
+> **Fase 2+** (Step Functions / Glue na AWS) valida persistência S3, inferência, Catalog e Athena. A Fase 1B **não substitui** a Fase 2 — complementa com feedback rápido sobre treino e métricas.
+
+---
+
+### Fase 1A — Testes unitários (pytest)
 
 ```powershell
+cd c:\welligton-aws\project-glue-3
+pip install -r requirements-dev.txt
 python -m pytest tests/ -v
 ```
 
 | Módulo de teste | O que cobre |
 |-----------------|-------------|
-| `test_schema_validation.py` | Validação S2 (schema, filtro por mês) |
-| `test_xgboost_training.py` | Treino S3 (split, métricas) |
-| `test_glue_catalog_predictions.py` | Registro S4-01 |
-| `test_pipeline_observability.py` | Métricas CloudWatch S4-03 |
-| `test_athena_predictions_query.py` | SQL S4-02 |
+| `test_schema_validation.py` | S2 — schema, filtro por mês, Parquet |
+| `test_xgboost_training.py` | S3 — split, treino, métricas, `model.pkl` |
+| `test_xgboost_inference.py` | S3-03 — inferência e `predictions.parquet` |
+| `test_simulate_monthly_evolution.py` | Simulação 24 meses (pipeline + walk-forward) |
+| `test_plot_evolution_report.py` | Geração PNG/Excel a partir do CSV |
+| `test_glue_catalog_predictions.py` | S4-01 — registro no Catalog |
+| `test_pipeline_observability.py` | S4-03 — métricas CloudWatch |
+| `test_athena_predictions_query.py` | S4-02 — SQL Athena |
 
-**Critério de sucesso:** todos os testes passam (0 failures).
+**Critério de sucesso:** `0 failures` (esperado: **62 testes**).
+
+---
+
+### Fase 1B — Teste completo do modelo local (24 meses)
+
+Reproduz offline a lógica **S2 (features) + S3 (treino XGBoost + RMSE/MAE)** para todo o histórico 2011–2012, sem Glue nem Step Functions.
+
+#### O que este teste cobre
+
+| Coberto localmente | Apenas na AWS (Fase 2+) |
+|--------------------|-------------------------|
+| Validação de schema (`day.csv`) | Jobs Glue + CloudWatch Logs |
+| Filtro por `ref_date` (mês/ano) | Gravação `features/*.parquet` no S3 |
+| Seleção de features (`season`, `temp`, …) | Job `predict-xgboost` → predições |
+| Treino XGBoost + métricas RMSE/MAE | `model.pkl`, Catalog, Athena |
+
+#### Obter o `day.csv`
+
+**Opção A — S3 (conta já com Terraform apply):**
+
+```powershell
+$bucket = terraform output -raw s3_bucket_name
+$input  = "s3://$bucket/raw/day.csv"
+aws s3 ls $input   # deve listar o arquivo
+```
+
+**Opção B — Arquivo local (sem AWS):**
+
+```powershell
+New-Item -ItemType Directory -Force -Path data | Out-Null
+# Baixe day.csv da UCI e coloque em data/day.csv
+# https://archive.ics.uci.edu/ml/machine-learning-databases/00275/Bike-Sharing-Dataset.zip
+$input = "data/day.csv"
+```
+
+Ou copie do bucket uma vez:
+
+```powershell
+$bucket = terraform output -raw s3_bucket_name
+aws s3 cp "s3://$bucket/raw/day.csv" data/day.csv
+$input = "data/day.csv"
+```
+
+#### Passo 1 — Simular evolução (CSV)
+
+```powershell
+python scripts/simulate_monthly_evolution.py `
+  --input-path $input `
+  --mode both `
+  --output evolution_report.csv
+```
+
+| Flag | Valores | Descrição |
+|------|---------|-----------|
+| `--input-path` | `s3://…/raw/day.csv` ou `data/day.csv` | Dataset completo (731 dias) |
+| `--mode` | `pipeline`, `walk_forward`, `both` | Ver tabela abaixo |
+| `--output` | default `evolution_report.csv` | Relatório mês a mês |
+
+| Modo | Comportamento | Linhas no CSV |
+|------|---------------|---------------|
+| `pipeline` | Igual à esteira AWS: treina só no mês, split 80/20 | 24 |
+| `walk_forward` | Treina com histórico anterior; avalia mês inteiro | 23 (sem jan/2011) |
+| `both` | As duas curvas | 47 |
+
+**Critério de sucesso:**
+
+- Script termina com exit code `0`
+- Tabela impressa no terminal (RMSE/MAE por mês)
+- `evolution_report.csv` com colunas: `ref_date`, `mode`, `n_train`, `n_eval`, `n_days_in_month`, `rmse`, `mae`
+
+#### Passo 2 — Gerar gráficos (PNG + Excel)
+
+```powershell
+python scripts/plot_evolution_report.py `
+  --input evolution_report.csv `
+  --png evolution_report.png `
+  --xlsx evolution_report.xlsx
+```
+
+| Saída | Conteúdo |
+|-------|----------|
+| `evolution_report.png` | MAE/RMSE mês a mês (pipeline e walk-forward) |
+| `evolution_report.xlsx` | Abas Dados, Pipeline, Walk_forward, Resumo + gráficos |
+
+**Critério de sucesso:** arquivos existem e têm tamanho > 0.
+
+#### Passo 3 — Interpretar resultados
+
+Leia [Como interpretar o evolution_report.csv](guia-usuario-modelo.md#como-interpretar-o-evolution_reportcsv) no guia do usuário.
+
+Resumo rápido:
+
+- **`pipeline`** — instável mês a mês (~24 dias de treino); espelha a SFN AWS.
+- **`walk_forward`** — salto de erro em **jan/2012** indica que padrões de 2011 não generalizam para 2012.
+- Use **MAE** para explicar erro em bicicletas/dia; **não misture** métricas entre modos.
+
+#### Script único (copiar e colar)
+
+Com bucket Terraform e credenciais AWS:
+
+```powershell
+cd c:\welligton-aws\project-glue-3
+pip install -r requirements-dev.txt
+python -m pytest tests/ -v
+$bucket = terraform output -raw s3_bucket_name
+python scripts/simulate_monthly_evolution.py `
+  --input-path "s3://$bucket/raw/day.csv" --mode both --output evolution_report.csv
+python scripts/plot_evolution_report.py
+Write-Host "`nArtefatos: evolution_report.csv, evolution_report.png, evolution_report.xlsx"
+```
+
+100% offline (após `data/day.csv` existir):
+
+```powershell
+pip install -r requirements-dev.txt
+python -m pytest tests/ -v
+python scripts/simulate_monthly_evolution.py --input-path data/day.csv --mode both
+python scripts/plot_evolution_report.py
+```
+
+#### Troubleshooting (teste local)
+
+| Sintoma | Causa | Ação |
+|---------|-------|------|
+| `FileNotFoundError: data/day.csv` | CSV local ausente | Opção B acima ou `aws s3 cp` |
+| Erro S3 / credenciais | Sem AWS configurada | Use `data/day.csv` local |
+| `ModuleNotFoundError: matplotlib` | Deps incompletas | `pip install -r requirements-dev.txt` |
+| CSV com 0 linhas walk_forward | Dataset vazio ou schema inválido | Confirme 731 linhas e colunas UCI |
+| pytest falha em xgboost | Pacote ausente | `pip install xgboost` |
 
 ---
 
@@ -294,6 +442,7 @@ Detalhes e CLI de alarmes: [S4-03 — CloudWatch](s4-03-cloudwatch.md).
 Use esta lista antes de merge ou demo:
 
 - [ ] `pytest tests/ -v` — 0 failures
+- [ ] (Recomendado) Fase 1B — `evolution_report.csv` com 47 linhas + PNG/Excel gerados
 - [ ] `terraform plan` — no changes (ou plano revisado)
 - [ ] S2 → `features/{ref_date}/features.parquet` no S3
 - [ ] S3 → `metrics/{ref_date}/metrics.json` com RMSE/MAE
