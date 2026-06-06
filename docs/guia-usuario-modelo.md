@@ -139,7 +139,43 @@ terraform output athena_query_predictions_example
 
 ---
 
-### Passo 2 — Comparar previsão vs realidade (teste do modelo)
+### Passo 2 — Validação: modelo vs gabarito (duas consultas)
+
+A tabela `bike_sharing.predictions` guarda **`cnt_pred`** (o que o modelo prevê) e **`cnt_real`** (gabarito — o que de fato ocorreu). Para validar, rode as duas consultas abaixo ou a consulta combinada do [Passo 3](#passo-3--comparar-previsão-vs-realidade-teste-completo-do-modelo).
+
+Substitua `ref_date` pelo mês desejado (ex.: `2011-06-01`).
+
+#### Consulta A — O que o **modelo prevê**
+
+```sql
+SELECT
+    dteday,
+    cnt_pred AS alugueis_previstos
+FROM bike_sharing.predictions
+WHERE ref_date = '2011-06-01'
+ORDER BY dteday;
+```
+
+Uso: **planejamento** — demanda esperada por dia, sem olhar o valor real.
+
+#### Consulta B — **Gabarito** (valor real)
+
+```sql
+SELECT
+    dteday,
+    cnt_real AS alugueis_reais
+FROM bike_sharing.predictions
+WHERE ref_date = '2011-06-01'
+ORDER BY dteday;
+```
+
+Uso: **conferência** — histórico observado (ground truth) do mesmo período.
+
+> Compare dia a dia: para cada `dteday`, `alugueis_previstos` (A) deve estar próximo de `alugueis_reais` (B). Diferenças grandes indicam dias atípicos ou features faltantes (feriado, chuva explícita, etc.).
+
+---
+
+### Passo 3 — Comparar previsão vs realidade (teste completo do modelo)
 
 Cole e execute (ajuste `ref_date` se necessário):
 
@@ -169,7 +205,7 @@ ORDER BY dteday;
 
 ---
 
-### Passo 3 — Resumo do mês (KPIs para reunião)
+### Passo 4 — Resumo do mês (KPIs para reunião)
 
 ```sql
 SELECT
@@ -194,7 +230,7 @@ Os valores devem ser **coerentes** (mesma ordem de grandeza).
 
 ---
 
-### Passo 4 — Dias com maior e menor demanda prevista
+### Passo 5 — Dias com maior e menor demanda prevista
 
 **Planejar frota total** (não por estação):
 
@@ -218,7 +254,7 @@ LIMIT 5;
 
 ---
 
-### Passo 5 — Onde o modelo erra mais (auditoria)
+### Passo 6 — Onde o modelo erra mais (auditoria)
 
 ```sql
 SELECT dteday, cnt_real, cnt_pred, ABS(cnt_real - cnt_pred) AS abs_error
@@ -232,7 +268,7 @@ Dias com erro alto costumam ser **eventos não modelados** (feriado, clima extre
 
 ---
 
-### Passo 6 — Disparar validação via Step Functions (opcional)
+### Passo 7 — Disparar validação via Step Functions (opcional)
 
 Sem escrever SQL manualmente:
 
@@ -247,7 +283,7 @@ Sucesso = query Athena executada; resultados em `s3://{bucket}/athena-results/`.
 
 ---
 
-### Passo 7 — Esteira completa (gerar predições do zero)
+### Passo 8 — Esteira completa (gerar predições do zero)
 
 ```powershell
 $SFN = terraform output -raw sfn_monthly_pipeline_arn
@@ -257,7 +293,7 @@ aws stepfunctions start-execution `
   --input '{"ref_date":"2011-06-01"}'
 ```
 
-Aguarde `SUCCEEDED` (~10–20 min), depois repita os passos 2–5 no Athena.
+Aguarde `SUCCEEDED` (~10–20 min), depois repita os passos 2–6 no Athena.
 
 ---
 

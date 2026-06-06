@@ -4,6 +4,35 @@ Query SQL para analistas validarem predições do mês: `dteday`, `cnt_real`, `c
 
 ## Query SQL
 
+### Validação em duas consultas (modelo vs gabarito)
+
+| Consulta | Coluna | Significado |
+|----------|--------|-------------|
+| **A — Modelo prevê** | `cnt_pred` | Predição do XGBoost |
+| **B — Gabarito** | `cnt_real` | Valor real observado |
+
+**A — O que o modelo prevê:**
+
+```sql
+SELECT dteday, cnt_pred AS alugueis_previstos
+FROM bike_sharing.predictions
+WHERE ref_date = '2011-06-01'
+ORDER BY dteday ASC;
+```
+
+**B — Gabarito (valor real):**
+
+```sql
+SELECT dteday, cnt_real AS alugueis_reais
+FROM bike_sharing.predictions
+WHERE ref_date = '2011-06-01'
+ORDER BY dteday ASC;
+```
+
+Detalhes para analistas: [Guia do usuário — dataset e modelo](guia-usuario-modelo.md).
+
+### Query combinada (validação com erro absoluto)
+
 ```sql
 SELECT
     dteday,
