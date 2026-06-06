@@ -9,6 +9,7 @@
 | [**Planejamento de sprints (Excel)**](pipeline_xgboost_sprints.xlsx) | Backlog S1–S4: user stories, prompts, critérios de aceite e estimativas |
 | [Getting Started](getting-started.md) | Configurar, aplicar Terraform e validar o pipeline |
 | [Arquitetura](architecture.md) | Componentes, fluxo S1–S4, IAM, S3 |
+| [**Guia do usuário — dataset e modelo**](guia-usuario-modelo.md) | Analistas/negócio: dataset, tabelas, Athena, como testar predições |
 | [**Guia de testes da esteira**](pipeline-testing-guide.md) | Onboarding de devs: pytest, S2→S4, checklist, troubleshooting |
 | [**Casos de uso comerciais**](commercial-use-cases.md) | Cenários de negócio, adaptação e proposta de valor |
 

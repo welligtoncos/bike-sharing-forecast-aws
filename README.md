@@ -154,6 +154,8 @@ Hoje, sem automação, o fluxo é **lento, propenso a erro e não escala**. Este
 
 O dataset de Bike Sharing tem **sazonalidade** (temperatura, estação do ano, dia da semana) — o mesmo tipo de padrão que modelos como XGBoost capturam bem e que aparece em problemas reais: previsão de estoque, ocupação hospitalar, volume de transações ou, neste projeto, métricas financeiras como série histórica da B3.
 
+> **Guia para analistas:** [Dataset, tabelas e como usar o modelo](docs/guia-usuario-modelo.md)
+
 > **Dica:** o dataset cobre **2011–2012**. Use `ref_date=2011-06-01` (ou outro mês desse intervalo) nos testes manuais.
 
 ## O que já está implementado
@@ -323,6 +325,7 @@ Query SQL direta (Athena console ou CLI): ver [S4-02 — Query Athena](docs/s4-0
 | [**Planejamento de sprints (Excel)**](docs/pipeline_xgboost_sprints.xlsx) | Backlog S1–S4 com user stories e critérios de aceite |
 | [Getting Started](docs/getting-started.md) | Pré-requisitos, deploy, validação |
 | [Arquitetura](docs/architecture.md) | Fluxo de dados, recursos AWS, IAM |
+| [**Guia do usuário — dataset e modelo**](docs/guia-usuario-modelo.md) | Dataset Bike Sharing, tabelas Athena, como testar e usar predições |
 | [**Guia de testes da esteira**](docs/pipeline-testing-guide.md) | Como devs validam S2→S4, pytest, checklist |
 | [**Casos de uso comerciais**](docs/commercial-use-cases.md) | Cenários de negócio e como adaptar o pipeline |
 | [S1-01 — Bucket S3](docs/s1-01-s3-bucket.md) | Estrutura de pastas e versionamento |

@@ -253,6 +253,7 @@ Documente:
 
 | Documento | Para quem |
 |-----------|-----------|
+| [**Guia do usuário — dataset e modelo**](guia-usuario-modelo.md) | Analistas/negócio — testar e usar predições |
 | [Guia de testes da esteira](pipeline-testing-guide.md) | Devs — validar end-to-end |
 | [Arquitetura](architecture.md) | Arquitetos — componentes AWS |
 | [Getting Started](getting-started.md) | Novo dev — setup |
