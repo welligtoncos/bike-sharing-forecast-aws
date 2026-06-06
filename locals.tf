@@ -32,6 +32,11 @@ locals {
   glue_job_parse_args_name   = "${local.name_prefix}-glue-job-parse-args"
   glue_script_parse_args_key = "scripts/parse_args_job.py"
 
+  # S2-01 — Glue Job validacao schema day.csv
+  glue_job_validate_day_csv_name   = "${local.name_prefix}-glue-job-validate-day-csv"
+  glue_script_validate_day_csv_key = "scripts/validate_day_csv_job.py"
+  glue_module_schema_validation_key = "scripts/schema_validation.py"
+
   glue_catalog_arn  = "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:catalog"
   glue_database_arn = "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:database/${var.glue_db_name}"
   glue_table_arns = [

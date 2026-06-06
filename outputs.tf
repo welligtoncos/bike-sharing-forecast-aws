@@ -77,3 +77,13 @@ output "s3_input_day_csv_path" {
   description = "Caminho S3 padrao passado ao Glue Job (raw/day.csv)."
   value       = local.s3_input_day_csv_path
 }
+
+output "glue_job_validate_day_csv_name" {
+  description = "Nome do Glue Job de validacao de schema day.csv (S2-01)."
+  value       = aws_glue_job.validate_day_csv.name
+}
+
+output "glue_job_validate_day_csv_arn" {
+  description = "ARN do Glue Job de validacao de schema day.csv (S2-01)."
+  value       = aws_glue_job.validate_day_csv.arn
+}
