@@ -32,17 +32,22 @@
 
 ### Backlog vs. implementação
 
-O arquivo [pipeline_xgboost_sprints.xlsx](pipeline_xgboost_sprints.xlsx) é o **planejamento original** (status “To Do” nas células). No repositório, a maioria das stories já está entregue:
+O arquivo [pipeline_xgboost_sprints.xlsx](pipeline_xgboost_sprints.xlsx) acompanha o backlog (user stories, prompts, critérios de aceite). **Status atualizado em 2026-06-06:**
 
-| Story | Status no repo |
-|-------|----------------|
-| S1-01 … S1-03 | ✅ |
-| S2-01 … S2-03 | ✅ |
-| S3-01 | ✅ |
-| S3-02, S3-03 | 🔜 (modelo `.pkl` + job de inferência) |
-| S4-01 … S4-03 | ✅ |
+| Story | Status |
+|-------|--------|
+| S1-01 … S1-03 | Concluído |
+| S2-01 … S2-03 | Concluído |
+| S3-01 | Concluído |
+| S3-02, S3-03 | Pendente |
+| S4-01 … S4-03 | Concluído |
 
-Atualize o Excel localmente conforme o time fechar stories pendentes.
+| Sprint | Status no Excel |
+|--------|-----------------|
+| Sprint 1 — Infra | Concluído |
+| Sprint 2 — Features | Concluído |
+| Sprint 3 — Modelo | Em andamento |
+| Sprint 4 — Lake Formation | Concluído |
 
 ## Convenção de nomenclatura
 
