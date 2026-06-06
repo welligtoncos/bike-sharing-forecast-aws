@@ -11,6 +11,7 @@ glue_db_name   = "b3_raw"       # database Glue referenciado na policy IAM
 sns_pipeline_alerts_arn = "arn:aws:sns:us-east-1:000000000000:glue-b3-dev-sns-pipeline-alerts"
 create_sns_topic             = false
 create_eventbridge_schedule  = false  # true quando tiver events:PutRule
+enable_lake_formation        = false  # true quando tiver lakeformation:GrantPermissions
 pipeline_alert_email         = "seu-email@exemplo.com"
 
 # cron: dia 1 de cada mes as 06:00 UTC

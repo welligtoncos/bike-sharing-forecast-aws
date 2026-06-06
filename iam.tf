@@ -70,7 +70,7 @@ resource "aws_iam_role_policy" "glue_s3" {
   })
 }
 
-# Leitura do Glue Data Catalog — necessario para jobs que consultam tabelas/particoes.
+# Leitura do Glue Data Catalog — database legado b3_raw.
 resource "aws_iam_role_policy" "glue_catalog" {
   name = "${local.name_prefix}-glue-catalog"
   role = aws_iam_role.glue.id
@@ -92,6 +92,39 @@ resource "aws_iam_role_policy" "glue_catalog" {
         Resource = concat(
           [local.glue_catalog_arn, local.glue_database_arn],
           local.glue_table_arns,
+        )
+      },
+    ]
+  })
+}
+
+# Escrita Glue Catalog — S4-01 database bike_sharing + tabela predictions.
+resource "aws_iam_role_policy" "glue_catalog_write" {
+  name = "${local.name_prefix}-glue-catalog-write"
+  role = aws_iam_role.glue.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "WritePredictionsGlueCatalog"
+        Effect = "Allow"
+        Action = [
+          "glue:CreateDatabase",
+          "glue:UpdateDatabase",
+          "glue:GetDatabase",
+          "glue:CreateTable",
+          "glue:UpdateTable",
+          "glue:GetTable",
+          "glue:CreatePartition",
+          "glue:UpdatePartition",
+          "glue:BatchCreatePartition",
+          "glue:GetPartition",
+          "glue:GetPartitions",
+        ]
+        Resource = concat(
+          [local.glue_catalog_arn, local.glue_predictions_database_arn],
+          local.glue_predictions_table_arns,
         )
       },
     ]

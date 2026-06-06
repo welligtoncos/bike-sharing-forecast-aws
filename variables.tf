@@ -44,7 +44,7 @@ variable "environment" {
 }
 
 variable "glue_db_name" {
-  description = "Nome logico do Glue Database (usado na policy IAM de acesso ao Catalog)."
+  description = "Nome logico do Glue Database legado (policy IAM de leitura)."
   type        = string
   default     = "b3_raw"
 
@@ -52,6 +52,23 @@ variable "glue_db_name" {
     condition     = can(regex("^[a-z0-9_]+$", var.glue_db_name))
     error_message = "glue_db_name deve conter apenas letras minusculas, numeros e underscores."
   }
+}
+
+variable "glue_predictions_db_name" {
+  description = "Glue Database para tabela predictions (S4-01 — Lake Formation / Athena)."
+  type        = string
+  default     = "bike_sharing"
+
+  validation {
+    condition     = can(regex("^[a-z0-9_]+$", var.glue_predictions_db_name))
+    error_message = "glue_predictions_db_name deve conter apenas letras minusculas, numeros e underscores."
+  }
+}
+
+variable "enable_lake_formation" {
+  description = "Registra bucket no Lake Formation e concede permissoes ao role Glue (requer lakeformation:*)."
+  type        = bool
+  default     = false
 }
 
 variable "sns_pipeline_alerts_arn" {

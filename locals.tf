@@ -43,10 +43,19 @@ locals {
   glue_script_train_xgboost_key      = "scripts/train_xgboost_job.py"
   glue_module_xgboost_training_key   = "scripts/xgboost_training.py"
 
+  # S4-01 — Glue Catalog predictions (bike_sharing)
+  glue_job_register_predictions_catalog_name   = "${local.name_prefix}-glue-job-register-predictions-catalog"
+  glue_script_register_predictions_catalog_key = "scripts/register_predictions_catalog_job.py"
+  glue_module_catalog_predictions_key          = "scripts/glue_catalog_predictions.py"
+
   glue_catalog_arn  = "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:catalog"
   glue_database_arn = "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:database/${var.glue_db_name}"
   glue_table_arns = [
     "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:table/${var.glue_db_name}/*",
+  ]
+  glue_predictions_database_arn = "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:database/${var.glue_predictions_db_name}"
+  glue_predictions_table_arns = [
+    "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:table/${var.glue_predictions_db_name}/*",
   ]
   glue_job_log_group_arn        = "arn:aws:logs:${var.aws_region}:${var.aws_account_id}:log-group:/aws-glue/python-jobs"
   glue_job_log_group_stream_arn = "${local.glue_job_log_group_arn}:*"
@@ -62,6 +71,7 @@ locals {
   # SNS: topico pre-existente (evita sns:ListTagsForResource no refresh do provider)
   sns_topic_arn = var.sns_pipeline_alerts_arn != "" ? var.sns_pipeline_alerts_arn : "arn:aws:sns:${var.aws_region}:${var.aws_account_id}:${local.sns_pipeline_alerts_name}"
 
-  features_parquet_uri_template = "s3://${local.s3_bucket_name}/features/{ref_date}/features.parquet"
-  metrics_json_uri_template     = "s3://${local.s3_bucket_name}/metrics/{ref_date}/metrics.json"
+  features_parquet_uri_template    = "s3://${local.s3_bucket_name}/features/{ref_date}/features.parquet"
+  metrics_json_uri_template        = "s3://${local.s3_bucket_name}/metrics/{ref_date}/metrics.json"
+  predictions_parquet_uri_template = "s3://${local.s3_bucket_name}/predictions/ref_date={ref_date}/predictions.parquet"
 }

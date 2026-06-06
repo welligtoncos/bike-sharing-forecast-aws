@@ -107,3 +107,28 @@ output "metrics_json_uri_template" {
   description = "Template S3 das metricas de treino por ref_date (S3-01)."
   value       = local.metrics_json_uri_template
 }
+
+output "glue_predictions_database_name" {
+  description = "Glue Database Lake Formation / Athena (S4-01)."
+  value       = aws_glue_catalog_database.bike_sharing.name
+}
+
+output "glue_predictions_table_name" {
+  description = "Tabela Glue de predicoes (S4-01)."
+  value       = "predictions"
+}
+
+output "glue_job_register_predictions_catalog_name" {
+  description = "Nome do Glue Job de registro no Catalog (S4-01)."
+  value       = aws_glue_job.register_predictions_catalog.name
+}
+
+output "predictions_parquet_uri_template" {
+  description = "Template S3 do Parquet de predicoes particionado por ref_date (S4-01)."
+  value       = local.predictions_parquet_uri_template
+}
+
+output "athena_query_predictions_example" {
+  description = "Exemplo de query Athena sobre bike_sharing.predictions."
+  value       = "SELECT dteday, cnt_real, cnt_pred FROM ${var.glue_predictions_db_name}.predictions WHERE ref_date = '2011-06-01'"
+}
