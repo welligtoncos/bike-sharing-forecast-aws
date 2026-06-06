@@ -1,8 +1,8 @@
 """
-S2-01 — Validacao de schema do day.csv (Bike Sharing).
+S2-01 / S2-02 — Leitura, validacao de schema e filtro por ref_date (day.csv).
 
-Le o CSV do S3 via pandas + s3fs e garante que as colunas obrigatorias
-existem antes do feature engineering / treino do modelo.
+Le o CSV do S3 via pandas + s3fs, valida colunas obrigatorias e filtra
+registros cujo dteday corresponde ao mes/ano de ref_date.
 """
 
 from __future__ import annotations
@@ -14,6 +14,8 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+DATE_COLUMN = "dteday"
+
 REQUIRED_COLUMNS: tuple[str, ...] = (
     "season",
     "temp",
@@ -21,6 +23,7 @@ REQUIRED_COLUMNS: tuple[str, ...] = (
     "windspeed",
     "weekday",
     "cnt",
+    DATE_COLUMN,
 )
 
 
@@ -51,3 +54,52 @@ def load_and_validate_day_csv(s3_path: str) -> pd.DataFrame:
     validate_schema(df)
     logger.info("DataFrame shape: %s", df.shape)
     return df
+
+
+def parse_ref_date(ref_date: str) -> tuple[int, int]:
+    """Extrai ano e mes de ref_date (formato YYYY-MM-DD)."""
+    parsed = pd.to_datetime(ref_date)
+    return int(parsed.year), int(parsed.month)
+
+
+def filter_by_ref_date(
+    df: pd.DataFrame,
+    ref_date: str,
+    date_column: str = DATE_COLUMN,
+) -> pd.DataFrame:
+    """Mantem apenas registros cujo dteday pertence ao mes/ano de ref_date."""
+    if date_column not in df.columns:
+        raise ValueError(f"Coluna ausente no schema: '{date_column}'")
+
+    year, month = parse_ref_date(ref_date)
+    dates = pd.to_datetime(df[date_column])
+    mask = (dates.dt.year == year) & (dates.dt.month == month)
+    filtered = df.loc[mask].copy()
+
+    logger.info(
+        "Quantidade de registros filtrados para %04d-%02d: %d",
+        year,
+        month,
+        len(filtered),
+    )
+    return filtered
+
+
+def process_day_csv(s3_path: str, ref_date: str) -> pd.DataFrame | None:
+    """
+    Carrega, valida e filtra day.csv.
+
+    Retorna None se nao houver registros no mes (warning logado, sem erro fatal).
+    """
+    df = load_and_validate_day_csv(s3_path)
+    filtered = filter_by_ref_date(df, ref_date)
+
+    if filtered.empty:
+        logger.warning(
+            "Nenhum registro encontrado para ref_date=%s; encerrando job sem erro.",
+            ref_date,
+        )
+        return None
+
+    logger.info("DataFrame shape apos filtro: %s", filtered.shape)
+    return filtered

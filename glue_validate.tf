@@ -44,6 +44,7 @@ resource "aws_glue_job" "validate_day_csv" {
     "--extra-py-files"                   = "s3://${aws_s3_bucket.pipeline.id}/${local.glue_module_schema_validation_key}"
     "--additional-python-modules"        = "s3fs"
     "--s3_input_path"                    = local.s3_input_day_csv_path
+    "--ref_date"                         = "1970-01-01"
   }
 
   tags = {
