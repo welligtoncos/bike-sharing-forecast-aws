@@ -6,6 +6,7 @@
 
 | Documento | Descrição |
 |-----------|-----------|
+| [**Planejamento de sprints (Excel)**](pipeline_xgboost_sprints.xlsx) | Backlog S1–S4: user stories, prompts, critérios de aceite e estimativas |
 | [Getting Started](getting-started.md) | Configurar, aplicar Terraform e validar o pipeline |
 | [Arquitetura](architecture.md) | Componentes, fluxo S1–S4, IAM, S3 |
 | [**Guia de testes da esteira**](pipeline-testing-guide.md) | Onboarding de devs: pytest, S2→S4, checklist, troubleshooting |
@@ -28,6 +29,20 @@
 | [S4-03 — CloudWatch](s4-03-cloudwatch.md) | Alarmes, dashboard, RMSE threshold via SFN |
 
 > Sprints 2 (features) e 3 (treino XGBoost) estão documentados no [README](../README.md) e cobertos por testes em `tests/`.
+
+### Backlog vs. implementação
+
+O arquivo [pipeline_xgboost_sprints.xlsx](pipeline_xgboost_sprints.xlsx) é o **planejamento original** (status “To Do” nas células). No repositório, a maioria das stories já está entregue:
+
+| Story | Status no repo |
+|-------|----------------|
+| S1-01 … S1-03 | ✅ |
+| S2-01 … S2-03 | ✅ |
+| S3-01 | ✅ |
+| S3-02, S3-03 | 🔜 (modelo `.pkl` + job de inferência) |
+| S4-01 … S4-03 | ✅ |
+
+Atualize o Excel localmente conforme o time fechar stories pendentes.
 
 ## Convenção de nomenclatura
 

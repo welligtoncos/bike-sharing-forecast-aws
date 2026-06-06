@@ -311,6 +311,7 @@ Query SQL direta (Athena console ou CLI): ver [S4-02 — Query Athena](docs/s4-0
 
 | Documento | Conteúdo |
 |-----------|----------|
+| [**Planejamento de sprints (Excel)**](docs/pipeline_xgboost_sprints.xlsx) | Backlog S1–S4 com user stories e critérios de aceite |
 | [Getting Started](docs/getting-started.md) | Pré-requisitos, deploy, validação |
 | [Arquitetura](docs/architecture.md) | Fluxo de dados, recursos AWS, IAM |
 | [**Guia de testes da esteira**](docs/pipeline-testing-guide.md) | Como devs validam S2→S4, pytest, checklist |
