@@ -6,58 +6,196 @@ Visão geral da infraestrutura e do fluxo de dados do pipeline.
 
 ```mermaid
 flowchart TB
-    subgraph AGENDAMENTO["Agendamento · S1-03 ✅"]
-        EB[EventBridge<br/>cron dia 1 / mês]
+    subgraph TRIGGER["Disparo"]
+        EB["EventBridge Rule<br/>cron(0 6 1 * ? *)<br/>dia 1 · 06:00 UTC"]
+        MANUAL["Execução manual<br/>aws stepfunctions start-execution<br/>input: ref_date opcional"]
     end
 
-    subgraph ORQUESTRACAO["Orquestração ✅"]
-        SF1[monthly_pipeline<br/>S1-03]
-        SF2[validate_predictions<br/>S4-02]
-        SNS[SNS alertas falha]
+    subgraph SFN["Step Functions · monthly_pipeline"]
+        direction TB
+        S00["00 Escolher ref_date<br/>manual ou YYYY-MM-01 auto"]
+        S01["01 Montar argumentos<br/>s3_input_path · database · Athena · threshold"]
+        S02["Glue S2 validate-day-csv"]
+        S03["Glue S3 train-xgboost"]
+        S04["Glue S3 predict-xgboost"]
+        S05["Glue S4 register-catalog"]
+        S06["Prep SQL Athena"]
+        S07["Athena validar predições"]
+        FAIL["SNS alerta → Fail"]
+        S00 --> S01 --> S02 --> S03 --> S04 --> S05 --> S06 --> S07
+        S02 & S03 & S04 & S05 & S07 -.->|erro| FAIL
     end
 
-    subgraph COMPUTE["Glue Python Shell"]
-        GJ1[parse_args<br/>S1-02 ✅]
-        GJ2[validate_day_csv<br/>S2 ✅]
-        GJ3[train_xgboost<br/>S3-01 ✅]
-        GJ4[register_catalog<br/>S4-01 ✅]
+    subgraph GLUE["AWS Glue · Python Shell"]
+        GJ2["validate_day_csv_job.py<br/>S2 schema + filtro mês"]
+        GJ3["train_xgboost_job.py<br/>S3 treino + métricas"]
+        GJ4["predict_xgboost_job.py<br/>S3-03 inferência"]
+        GJ5["register_predictions_catalog_job.py<br/>S4-01 Catalog"]
     end
 
-    subgraph S3["S3 pipeline · S1-01 ✅"]
-        RAW[raw/day.csv]
-        FEAT[features/…/features.parquet]
-        MET[metrics/…/metrics.json]
-        PRED["predictions/ref_date=…/"]
-        ATHOUT[athena-results/]
-        MOD[models/ · futuro]
+    subgraph STORAGE["Amazon S3 · pipeline bucket"]
+        RAW["raw/day.csv"]
+        SCRIPTS["scripts/ · glue-jobs/"]
+        FEAT["features/{ref_date}/features.parquet"]
+        MET["metrics/{ref_date}/metrics.json"]
+        MOD["models/{ref_date}/model.pkl"]
+        PRED["predictions/ref_date={ref_date}/predictions.parquet"]
+        ATHOUT["athena-results/"]
     end
 
-    subgraph ANALYTICS["Consulta · S4 ✅"]
-        GC["Glue Catalog<br/>bike_sharing.predictions"]
-        ATH[Athena workgroup]
-        USR[Analista / BI]
+    subgraph OBS["Observabilidade"]
+        CWLOG["CloudWatch Logs<br/>/aws-glue/python-jobs"]
+        CWMET["CloudWatch Metrics<br/>RMSE · MAE · RMSEThresholdBreached"]
+        SNS["SNS pipeline-alerts"]
+        ALM["Alarmes CW<br/>opcional · terraform flag"]
     end
 
-    EB --> SF1
-    SF1 --> GJ1
-    SF1 -.-> SNS
+    subgraph LAKE["Analytics"]
+        GC["Glue Data Catalog<br/>DB bike_sharing<br/>Tabela predictions"]
+        ATH["Athena Workgroup<br/>glue-b3-dev-athena-pipeline"]
+        USR["Analista / BI / Console"]
+    end
 
-    RAW --> GJ2 --> FEAT
-    FEAT --> GJ3 --> MET
-    FEAT --> PRED
-    PRED --> GJ4 --> GC
+    EB --> SFN
+    MANUAL --> SFN
 
-    SF2 --> ATH
+    S02 --> GJ2
+    S03 --> GJ3
+    S04 --> GJ4
+    S05 --> GJ5
+    S07 --> ATH
+
+    SCRIPTS -.->|deploy Terraform| GJ2 & GJ3 & GJ4 & GJ5
+
+    RAW --> GJ2
+    GJ2 --> FEAT
+    FEAT --> GJ3
+    GJ3 --> MET
+    GJ3 --> MOD
+    GJ3 --> CWMET
+    MOD --> GJ4
+    RAW --> GJ4
+    FEAT --> GJ4
+    GJ4 --> PRED
+    PRED --> GJ5
+    GJ5 --> GC
+
     GC --> ATH
     PRED --> ATH
     ATH --> ATHOUT
     ATH --> USR
 
-    classDef done fill:#d4edda,stroke:#28a745,color:#155724
-    classDef future fill:#fff3cd,stroke:#ffc107,color:#856404
-    class EB,SF1,SF2,GJ1,GJ2,GJ3,GJ4,RAW,FEAT,MET,PRED,GC,ATH,ATHOUT,SNS done
-    class MOD future
+    GJ2 & GJ3 & GJ4 & GJ5 --> CWLOG
+    FAIL --> SNS
+    CWMET -.-> ALM
+    ALM -.-> SNS
 ```
+
+## Esteira mensal — passo a passo (sequência)
+
+Diagrama temporal de **uma execução** da SFN `monthly_pipeline`, com todos os serviços envolvidos:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant EB as EventBridge
+    participant DEV as Operador / Analista
+    participant SFN as Step Functions<br/>monthly_pipeline
+    participant S3 as Amazon S3
+    participant G2 as Glue Job<br/>validate-day-csv
+    participant G3 as Glue Job<br/>train-xgboost
+    participant CW as CloudWatch
+    participant G4 as Glue Job<br/>predict-xgboost
+    participant G5 as Glue Job<br/>register-predictions-catalog
+    participant GC as Glue Data Catalog
+    participant ATH as Athena
+    participant SNS as SNS Alertas
+
+    alt Agendamento automático (dia 1 do mês)
+        EB->>SFN: StartExecution (sem input)
+        SFN->>SFN: ref_date = YYYY-MM-01 do mês atual
+    else Teste manual
+        DEV->>SFN: StartExecution {"ref_date":"2011-06-01"}
+        SFN->>SFN: Usa ref_date do input
+    end
+
+    SFN->>SFN: Monta args: s3_input_path, database_name,<br/>athena_workgroup, rmse_threshold, namespace CW
+
+    rect rgb(230, 245, 255)
+        Note over SFN,S3: S2 — Features
+        SFN->>G2: startJobRun.sync (--ref_date, --s3_input_path)
+        G2->>S3: Lê raw/day.csv
+        G2->>G2: Valida schema · filtra mês · seleciona features
+        G2->>S3: Escreve features/{ref_date}/features.parquet
+        G2->>CW: Logs Glue
+        G2-->>SFN: SUCCEEDED
+    end
+
+    rect rgb(255, 243, 230)
+        Note over SFN,CW: S3 — Treino + modelo
+        SFN->>G3: startJobRun.sync (+ rmse_threshold, cloudwatch_namespace)
+        G3->>S3: Lê features.parquet
+        G3->>G3: Split 80/20 · XGBRegressor · RMSE/MAE
+        G3->>S3: Escreve metrics/{ref_date}/metrics.json
+        G3->>S3: Escreve models/{ref_date}/model.pkl
+        G3->>CW: Publica métricas RMSE, MAE (S4-03)
+        G3->>CW: Logs Glue
+        G3-->>SFN: SUCCEEDED
+    end
+
+    rect rgb(230, 255, 230)
+        Note over SFN,S3: S3-03 — Inferência
+        SFN->>G4: startJobRun.sync
+        G4->>S3: Carrega model.pkl
+        G4->>S3: Lê day.csv + features do mês
+        G4->>G4: Prediz cnt_pred para cada dia
+        G4->>S3: Escreve predictions/ref_date={ref_date}/predictions.parquet
+        G4->>CW: Logs Glue
+        G4-->>SFN: SUCCEEDED
+    end
+
+    rect rgb(245, 230, 255)
+        Note over SFN,GC: S4-01 — Catalog
+        SFN->>G5: startJobRun.sync (+ database_name)
+        G5->>S3: Lê predictions.parquet (schema)
+        G5->>GC: Cria/atualiza bike_sharing.predictions<br/>partição ref_date
+        G5->>CW: Logs Glue
+        G5-->>SFN: SUCCEEDED
+    end
+
+    rect rgb(255, 230, 245)
+        Note over SFN,ATH: S4-02 — Validação SQL
+        SFN->>SFN: Monta SQL abs_error por dteday
+        SFN->>ATH: startQueryExecution.sync (workgroup)
+        ATH->>GC: Resolve tabela + partição
+        ATH->>S3: Scan predictions via Catalog
+        ATH->>S3: Resultado em athena-results/
+        ATH-->>SFN: SUCCEEDED
+    end
+
+    SFN-->>DEV: Execution SUCCEEDED
+
+    opt Qualquer Glue Job ou Athena falha
+        SFN->>SNS: Publish [pipeline falhou]<br/>ref_date · execução · erro
+        SFN-->>DEV: Execution FAILED
+    end
+```
+
+### Tabela resumo dos passos
+
+| # | Estado SFN | Serviço AWS | Script Glue | Entrada S3 | Saída S3 / destino |
+|---|------------|-------------|-------------|------------|-------------------|
+| 0 | `00_EscolherRefDate` | Step Functions | — | — | `ref_date` |
+| 1 | `01_MontarArgumentos` | Step Functions | — | — | args consolidados |
+| 2 | `Glue_S2_ValidarCSV_Features` | Glue | `validate_day_csv_job.py` | `raw/day.csv` | `features/{ref_date}/features.parquet` |
+| 3 | `Glue_S3_TreinarXGBoost` | Glue + CloudWatch | `train_xgboost_job.py` | `features.parquet` | `metrics.json`, `model.pkl`, métricas CW |
+| 4 | `Glue_S3_InferirPredicoes` | Glue | `predict_xgboost_job.py` | `model.pkl`, `day.csv` | `predictions/ref_date=…/predictions.parquet` |
+| 5 | `Glue_S4_RegistrarGlueCatalog` | Glue + Catalog | `register_predictions_catalog_job.py` | `predictions.parquet` | Tabela `bike_sharing.predictions` |
+| 6 | `Prep_S4_MontarQueryAthena` | Step Functions | — | — | SQL `abs_error` |
+| 7 | `Athena_S4_ValidarPredicoes` | Athena | — | Catalog + S3 | `athena-results/` |
+| ✗ | `Alerta_SNS_Falha` | SNS | — | — | E-mail / subscriber |
+
+> **Fora da SFN mensal:** job `parse_args` (S1-02 smoke test) e SFN `validate-predictions` (Athena isolado) existem para testes pontuais — ver [S1-03](s1-03-step-functions.md).
 
 ## Pipeline de features (Sprint 2)
 
