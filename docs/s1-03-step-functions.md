@@ -46,14 +46,40 @@ sequenceDiagram
 
 Arquivo: [`stepfunctions/monthly_pipeline.asl.json.tpl`](../stepfunctions/monthly_pipeline.asl.json.tpl)
 
-### Estados
+### Legendas no console Step Functions
 
-| Estado | Tipo | Função |
-|--------|------|--------|
-| `BuildArguments` | Pass | Calcula `ref_date` e define paths |
-| `RunGlueJob` | Task (sync) | Invoca Glue Job |
-| `NotifyFailure` | Task | Publica no SNS |
-| `FailExecution` | Fail | Marca execução como falha |
+Na interface AWS, cada **caixa do grafo** mostra o **nome do estado** (legenda curta). A **descrição completa** fica no campo `Comment` do ASL:
+
+1. Console → **Step Functions** → state machine → aba **Definition** ou **Edit**
+2. Clique em um estado (ex.: `Glue_S2_ValidarCSV_Features`)
+3. Painel lateral / Code: campo **Comment** com explicação em português
+
+| Prefixo no nome | Significado na interface |
+|-----------------|--------------------------|
+| `00_`, `01_`, `01A_` | Preparação (`ref_date`, argumentos) |
+| `Glue_S2_*` | Glue Job — feature engineering |
+| `Glue_S3_*` | Glue Job — treino ou inferência ML |
+| `Glue_S4_*` | Glue Job — Glue Catalog |
+| `Prep_S4_*` | Pass — monta SQL Athena |
+| `Athena_S4_*` | Task — executa query Athena |
+| `Alerta_SNS_*` | Notificação de falha |
+| `Falha_*` | Estado terminal de erro |
+
+### Estados (pipeline mensal completo)
+
+| Estado | Tipo | Glue / serviço |
+|--------|------|----------------|
+| `00_EscolherRefDate` | Choice | Input manual ou mês corrente |
+| `01A_RefDatePrimeiroDiaMes` | Pass | Calcula YYYY-MM-01 |
+| `01_MontarArgumentos` | Pass | Paths S3, Athena, CloudWatch |
+| `Glue_S2_ValidarCSV_Features` | Task sync | `validate-day-csv` |
+| `Glue_S3_TreinarXGBoost` | Task sync | `train-xgboost` |
+| `Glue_S3_InferirPredicoes` | Task sync | `predict-xgboost` |
+| `Glue_S4_RegistrarGlueCatalog` | Task sync | `register-predictions-catalog` |
+| `Prep_S4_MontarQueryAthena` | Pass | SQL `abs_error` |
+| `Athena_S4_ValidarPredicoes` | Task sync | Athena |
+| `Alerta_SNS_Falha` | Task | SNS |
+| `Falha_Pipeline` | Fail | — |
 
 ### Cálculo de `ref_date`
 

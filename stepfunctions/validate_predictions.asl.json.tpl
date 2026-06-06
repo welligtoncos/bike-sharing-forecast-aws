@@ -1,21 +1,21 @@
 {
-  "Comment": "S4-02 — Consulta Athena: predicoes do mes com erro absoluto (ref_date parametrizavel)",
-  "StartAt": "BuildQuery",
+  "Comment": "S4-02 — Validacao analitica via Athena. Legenda: Prep_* prepara SQL; Athena_* executa consulta.",
+  "StartAt": "Prep_S4_MontarQueryValidacao",
   "States": {
-    "BuildQuery": {
+    "Prep_S4_MontarQueryValidacao": {
       "Type": "Pass",
-      "Comment": "Monta QueryString com States.Format e ref_date do input da execucao",
+      "Comment": "[S4-02 | Prep] Monta SQL com ref_date do input: compara cnt_real vs cnt_pred e calcula abs_error por dia.",
       "Parameters": {
         "ref_date.$": "$.ref_date",
         "database_name": "${database_name}",
         "workgroup": "${athena_workgroup_name}",
         "query_string.$": "States.Format('SELECT dteday, cnt_real, cnt_pred, ABS(cnt_real - cnt_pred) AS abs_error FROM ${database_name}.predictions WHERE ref_date = \\'{}\\' ORDER BY dteday ASC', $.ref_date)"
       },
-      "Next": "RunAthenaQuery"
+      "Next": "Athena_S4_ExecutarValidacao"
     },
-    "RunAthenaQuery": {
+    "Athena_S4_ExecutarValidacao": {
       "Type": "Task",
-      "Comment": "Executa query e aguarda conclusao (startQueryExecution.sync)",
+      "Comment": "[S4-02 | Athena] Roda query no workgroup glue-b3-dev-athena-pipeline; resultado em athena-results/ no bucket do pipeline.",
       "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
       "Parameters": {
         "QueryString.$": "$.query_string",
