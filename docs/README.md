@@ -1,14 +1,30 @@
 # Documentação — project-glue-3
 
-Índice da documentação do pipeline B3.
+Índice da documentação do pipeline Bike Sharing / B3.
+
+## Visão geral
 
 | Documento | Descrição |
 |-----------|-----------|
-| [Getting Started](getting-started.md) | Como configurar, aplicar e validar a infraestrutura |
-| [Arquitetura](architecture.md) | Visão geral dos componentes e fluxo de dados |
-| [S1-01 — Bucket S3](s1-01-s3-bucket.md) | Bucket pipeline, pastas, versionamento, IAM S3 |
-| [S1-02 — Glue Job](s1-02-glue-job.md) | Python Shell, argumentos, execução e integração Step Functions |
-| [S1-03 — Step Functions](s1-03-step-functions.md) | Agendamento mensal, ASL, EventBridge e alertas SNS |
+| [Getting Started](getting-started.md) | Configurar, aplicar Terraform e validar o pipeline |
+| [Arquitetura](architecture.md) | Componentes, fluxo S1–S4, IAM, S3 |
+
+## Sprint 1 — Infraestrutura
+
+| Documento | Descrição |
+|-----------|-----------|
+| [S1-01 — Bucket S3](s1-01-s3-bucket.md) | Pastas, versionamento, IAM S3 |
+| [S1-02 — Glue Job](s1-02-glue-job.md) | Python Shell, argumentos, logs |
+| [S1-03 — Step Functions](s1-03-step-functions.md) | Agendamento mensal, ASL, SNS, EventBridge |
+
+## Sprint 4 — Catalog e Athena
+
+| Documento | Descrição |
+|-----------|-----------|
+| [S4-01 — Glue Catalog](s4-01-glue-catalog.md) | Tabela `bike_sharing.predictions`, partição `ref_date` |
+| [S4-02 — Query Athena](s4-02-athena-query.md) | SQL `abs_error`, Step Functions parametrizável |
+
+> Sprints 2 (features) e 3 (treino XGBoost) estão documentados no [README](../README.md) e cobertos por testes em `tests/`.
 
 ## Convenção de nomenclatura
 
@@ -22,6 +38,7 @@ Exemplo (dev, conta `303238378103`):
 |---------|------|
 | Bucket S3 | `glue-b3-dev-s3-pipeline-303238378103` |
 | IAM Role Glue | `glue-b3-dev-iam-glue` |
-| Glue Job | `glue-b3-dev-glue-job-parse-args` |
+| Glue Database | `bike_sharing` |
+| Athena Workgroup | `glue-b3-dev-athena-pipeline` |
 
 O `account_id` aparece apenas no nome do bucket (unicidade global na AWS).

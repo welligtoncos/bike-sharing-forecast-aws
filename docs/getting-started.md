@@ -80,7 +80,9 @@ glue_db_name   = "b3_raw"
 | `aws_account_id` | ID da conta (12 dígitos) | `303238378103` |
 | `aws_region` | Região dos recursos | `us-east-1` |
 | `environment` | Ambiente | `dev` |
-| `glue_db_name` | Database Glue referenciado na policy IAM | `b3_raw` |
+| `glue_db_name` | Database Glue legado (IAM leitura) | `b3_raw` |
+| `glue_predictions_db_name` | Database predições / Athena | `bike_sharing` |
+| `enable_lake_formation` | Permissões LF no bucket | `false` |
 
 > `terraform.tfvars` está no `.gitignore` — nunca commite valores locais.
 
@@ -116,7 +118,9 @@ aws s3 ls "s3://$BUCKET/"
 Esperado:
 
 ```
+athena-results/
 features/
+metrics/
 models/
 predictions/
 raw/
@@ -175,5 +179,6 @@ terraform destroy -var-file="terraform.tfvars"
 
 ## Próximos passos
 
-- [Arquitetura](architecture.md) — entenda o fluxo completo
-- [S1-02 — Glue Job](s1-02-glue-job.md) — integração com Step Functions
+- [Arquitetura](architecture.md) — fluxo completo S1–S4
+- [S4-02 — Query Athena](s4-02-athena-query.md) — validar predições do mês
+- [README](../README.md) — pipeline manual S2 → S4

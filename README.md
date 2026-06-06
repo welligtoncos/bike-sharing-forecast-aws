@@ -27,10 +27,11 @@ flowchart TB
         GJ1["parse_args_job.py<br/>S1-02 ✅"]
         GJ2["validate_day_csv_job.py<br/>S2 ✅"]
         GJ3["train_xgboost_job.py<br/>S3-01 ✅"]
+        GJ4["register_predictions_catalog<br/>S4-01 ✅"]
         S2A["① Validar schema"]
         S2B["② Filtrar dteday"]
         S2C["③ Parquet features"]
-        S3A["④ XGBRegressor<br/>split 80/20"]
+        S3A["④ XGBRegressor"]
         S3B["⑤ RMSE + MAE"]
     end
 
@@ -39,7 +40,8 @@ flowchart TB
         RAW["raw/day.csv"]
         FEAT["features/{ref_date}/features.parquet"]
         MET["metrics/{ref_date}/metrics.json"]
-        PRED["predictions/ · futuro"]
+        PRED["predictions/ref_date=…/"]
+        ATHOUT["athena-results/"]
         MOD["models/ · futuro"]
     end
 
@@ -49,10 +51,11 @@ flowchart TB
         ALM["Alarmes RMSE · futuro"]
     end
 
-    subgraph ANALYTICS["Consulta · futuro"]
-        GC["Glue Catalog · b3_raw"]
-        ATH["Athena · cnt_real vs cnt_pred"]
-        USR["Time de negócio / BI"]
+    subgraph ANALYTICS["Consulta · S4 ✅"]
+        GC["Glue Catalog<br/>bike_sharing.predictions"]
+        SF2["Step Functions<br/>validate_predictions"]
+        ATH["Athena workgroup"]
+        USR["Analista / BI"]
     end
 
     EB --> SF
@@ -68,9 +71,17 @@ flowchart TB
     GJ3 --> S3A --> S3B
     S3B --> MET
 
+    PRED --> GJ4 --> GC
+    SF2 --> ATH
+    GC --> ATH
+    PRED --> ATH
+    ATH --> ATHOUT
+    ATH --> USR
+
     GJ1 --> CW
     GJ2 --> CW
     GJ3 --> CW
+    GJ4 --> CW
     FAIL --> SNS
     ALM -.-> SNS
 
@@ -78,31 +89,27 @@ flowchart TB
     S3 --- FEAT
     S3 --- MET
     S3 --- PRED
+    S3 --- ATHOUT
     S3 --- MOD
-
-    FEAT --> GC
-    PRED --> GC
-    GC --> ATH --> USR
 
     classDef done fill:#d4edda,stroke:#28a745,color:#155724
     classDef future fill:#fff3cd,stroke:#ffc107,color:#856404
 
-    class EB,SF,BUILD,RUN,GJ1,GJ2,GJ3,S2A,S2B,S2C,S3A,S3B,S3,RAW,FEAT,MET,CW,SNS,FAIL done
-    class PRED,MOD,ALM,GC,ATH,USR future
+    class EB,SF,BUILD,RUN,GJ1,GJ2,GJ3,GJ4,S2A,S2B,S2C,S3A,S3B,S3,RAW,FEAT,MET,PRED,GC,SF2,ATH,ATHOUT,CW,SNS,FAIL done
+    class MOD,ALM future
 ```
 
-Legenda: **verde** = implementado (Sprint 1 + 2 + 3) · **amarelo** = próximas stories (inferência, persistência do modelo, Athena, alarmes).
+Legenda: **verde** = implementado (Sprint 1–4) · **amarelo** = próximas stories (inferência produção, persistência do modelo, alarmes).
 
-### Fluxo de dados (Sprint 2 → Sprint 3)
+### Fluxo de dados (Sprint 2 → 4)
 
 ```mermaid
 flowchart LR
-    A["raw/day.csv"] --> B["Validar schema"]
-    B --> C["Filtrar ref_date"]
-    C --> D["features.parquet"]
-    D --> E["X / y split 80/20"]
-    E --> F["XGBRegressor"]
-    F --> G["metrics.json<br/>RMSE + MAE"]
+    A["raw/day.csv"] --> B["features.parquet"]
+    B --> C["metrics.json"]
+    B --> D["predictions.parquet"]
+    D --> E["Glue Catalog"]
+    E --> F["Athena abs_error"]
 
     style A fill:#d4edda
     style B fill:#d4edda
@@ -110,7 +117,6 @@ flowchart LR
     style D fill:#d4edda
     style E fill:#d4edda
     style F fill:#d4edda
-    style G fill:#d4edda
 ```
 
 | Etapa | Story | Entrada → Saída |
@@ -121,8 +127,9 @@ flowchart LR
 | 4. Filtrar mês | S2-02 | `dteday` no mês/ano de `ref_date` |
 | 5. Salvar features | S2-03 | Parquet em `features/{ref_date}/` |
 | 6. Treinar modelo | S3-01 | Parquet → XGBoost + `metrics/{ref_date}/metrics.json` |
-| 7. Inferência | futuro | Previsões em `predictions/` |
-| 8. Consulta | futuro | Athena → `cnt_pred` vs `cnt_real` |
+| 7. Predições | dev / futuro | `predictions/ref_date={ref_date}/predictions.parquet` |
+| 8. Glue Catalog | S4-01 | Tabela `bike_sharing.predictions` + partição |
+| 9. Consulta Athena | S4-02 | SQL com `abs_error`, ORDER BY `dteday` |
 
 ### O problema que resolve
 
@@ -139,9 +146,9 @@ Hoje, sem automação, o fluxo é **lento, propenso a erro e não escala**. Este
 
 | Pergunta | Resposta do pipeline |
 |----------|----------------------|
-| Qual será a demanda do próximo período? | Predição `cnt_pred` por dia (futuro) |
-| O modelo está acertando? | RMSE/MAE em `metrics.json` · futuro: `cnt_real` vs `cnt_pred` |
-| Quando o pipeline falhou ou degradou? | Alarmes CloudWatch + log de métricas |
+| Qual será a demanda do próximo período? | `cnt_pred` por dia em `predictions` |
+| O modelo está acertando? | RMSE/MAE em `metrics.json` + `abs_error` no Athena (S4-02) |
+| Quando o pipeline falhou ou degradou? | SNS + CloudWatch + alarmes (futuro) |
 
 ### Por que Bike Sharing?
 
@@ -173,7 +180,14 @@ O dataset de Bike Sharing tem **sazonalidade** (temperatura, estação do ano, d
 |-------|---------|--------|
 | S3-01 | XGBRegressor, split 80/20 (`random_state=42`), RMSE/MAE no CloudWatch e `metrics/{ref_date}/metrics.json` | ✅ |
 
-Próximas stories: serializar modelo em `models/`, inferência → `predictions/`, Glue Catalog, queries Athena.
+### Sprint 4 — Catalog e Athena
+
+| Story | Entrega | Status |
+|-------|---------|--------|
+| S4-01 | Tabela `bike_sharing.predictions` no Glue Catalog, partição `ref_date`, schema do Parquet | ✅ |
+| S4-02 | Query Athena (`dteday`, `cnt_real`, `cnt_pred`, `abs_error`) + Step Functions parametrizável | ✅ |
+
+Próximas stories: job de inferência em produção, serializar modelo em `models/`, encadear jobs no Step Functions mensal, alarmes RMSE.
 
 ## Início rápido
 
@@ -263,6 +277,35 @@ aws s3 cp "s3://$bucket/metrics/$ref/metrics.json" -
 
 > Jobs Python Shell rodam **1 execução por vez** — aguarde o run anterior terminar.
 
+### Pipeline completo S2 → S4 (validação manual)
+
+```powershell
+$bucket = terraform output -raw s3_bucket_name
+$ref    = "2011-06-01"
+$raw    = "s3://$bucket/raw/day.csv"
+
+# S2 — features
+aws glue start-job-run --job-name glue-b3-dev-glue-job-validate-day-csv `
+  --arguments "{`"--ref_date`":`"$ref`",`"--s3_input_path`":`"$raw`"}"
+
+# S3 — treino + métricas
+aws glue start-job-run --job-name glue-b3-dev-glue-job-train-xgboost `
+  --arguments "{`"--ref_date`":`"$ref`",`"--s3_input_path`":`"$raw`"}"
+
+# Predições (sample até job de inferência)
+python scripts/generate_sample_predictions.py --s3_input_path $raw --ref_date $ref
+
+# S4-01 — Glue Catalog
+aws glue start-job-run --job-name glue-b3-dev-glue-job-register-predictions-catalog `
+  --arguments "{`"--ref_date`":`"$ref`",`"--s3_input_path`":`"$raw`",`"--database_name`":`"bike_sharing`"}"
+
+# S4-02 — Athena via Step Functions
+$SFN = terraform output -raw sfn_validate_predictions_arn
+aws stepfunctions start-execution --state-machine-arn $SFN --input "{`"ref_date`":`"$ref`"}"
+```
+
+Query SQL direta (Athena console ou CLI): ver [S4-02 — Query Athena](docs/s4-02-athena-query.md).
+
 ## Documentação
 
 | Documento | Conteúdo |
@@ -272,6 +315,8 @@ aws s3 cp "s3://$bucket/metrics/$ref/metrics.json" -
 | [S1-01 — Bucket S3](docs/s1-01-s3-bucket.md) | Estrutura de pastas e versionamento |
 | [S1-02 — Glue Job](docs/s1-02-glue-job.md) | Argumentos, execução, logs |
 | [S1-03 — Step Functions](docs/s1-03-step-functions.md) | Agendamento mensal, ASL, SNS, EventBridge |
+| [S4-01 — Glue Catalog](docs/s4-01-glue-catalog.md) | Tabela `bike_sharing.predictions`, Lake Formation |
+| [S4-02 — Query Athena](docs/s4-02-athena-query.md) | SQL `abs_error`, workgroup, Step Functions |
 
 ## Estrutura do repositório
 
@@ -282,16 +327,26 @@ project-glue-3/
 ├── glue.tf              # Glue Job parse_args (S1-02)
 ├── glue_validate.tf     # Glue Job validate_day_csv (S2)
 ├── glue_train.tf        # Glue Job train_xgboost (S3-01)
+├── glue_catalog.tf      # Database bike_sharing + register catalog (S4-01)
+├── athena.tf            # Workgroup + SFN validate_predictions (S4-02)
 ├── stepfunctions.tf     # State machine, EventBridge, SNS (S1-03)
 ├── stepfunctions_iam.tf
 ├── stepfunctions/
-│   └── monthly_pipeline.asl.json.tpl
+│   ├── monthly_pipeline.asl.json.tpl
+│   └── validate_predictions.asl.json.tpl
+├── athena/
+│   └── predictions_validation.sql
 ├── scripts/
-│   ├── parse_args_job.py       # S1-02
-│   ├── validate_day_csv_job.py # S2 entry point
-│   ├── schema_validation.py    # S2 módulo compartilhado
-│   ├── train_xgboost_job.py    # S3-01 entry point
-│   └── xgboost_training.py     # S3-01 treino + métricas
+│   ├── parse_args_job.py              # S1-02
+│   ├── validate_day_csv_job.py        # S2
+│   ├── schema_validation.py           # S2 módulo
+│   ├── train_xgboost_job.py           # S3-01
+│   ├── xgboost_training.py            # S3-01 módulo
+│   ├── sample_predictions.py          # dev: Parquet sample
+│   ├── generate_sample_predictions.py # CLI sample
+│   ├── register_predictions_catalog_job.py  # S4-01
+│   ├── glue_catalog_predictions.py    # S4-01 boto3
+│   └── athena_predictions_query.py    # S4-02 SQL builder
 ├── tests/
 └── docs/
 ```
@@ -302,7 +357,13 @@ project-glue-3/
 terraform output s3_bucket_name                       # bucket pipeline
 terraform output -raw sfn_monthly_pipeline_arn        # Step Functions
 terraform output -raw glue_job_validate_day_csv_name  # job S2 (features Parquet)
-terraform output -raw glue_job_train_xgboost_name     # job S3-01 (treino)
-terraform output features_parquet_uri_template        # s3://…/features/{ref_date}/features.parquet
-terraform output metrics_json_uri_template            # s3://…/metrics/{ref_date}/metrics.json
+terraform output -raw glue_job_train_xgboost_name              # job S3-01
+terraform output -raw glue_job_register_predictions_catalog_name  # job S4-01
+terraform output glue_predictions_database_name              # bike_sharing
+terraform output -raw sfn_validate_predictions_arn             # Athena SFN S4-02
+terraform output athena_workgroup_name                         # workgroup Athena
+terraform output features_parquet_uri_template
+terraform output metrics_json_uri_template
+terraform output predictions_parquet_uri_template
+terraform output athena_query_predictions_example
 ```

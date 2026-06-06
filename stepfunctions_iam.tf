@@ -53,6 +53,68 @@ resource "aws_iam_role_policy" "stepfunctions_glue_sns" {
   })
 }
 
+resource "aws_iam_role_policy" "stepfunctions_athena" {
+  name = "${local.name_prefix}-sfn-athena"
+  role = aws_iam_role.stepfunctions.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "RunAthenaQueries"
+        Effect = "Allow"
+        Action = [
+          "athena:StartQueryExecution",
+          "athena:GetQueryExecution",
+          "athena:GetQueryResults",
+          "athena:StopQueryExecution",
+          "athena:GetWorkGroup",
+        ]
+        Resource = aws_athena_workgroup.pipeline.arn
+      },
+      {
+        Sid    = "ReadGlueCatalogForAthena"
+        Effect = "Allow"
+        Action = [
+          "glue:GetDatabase",
+          "glue:GetTable",
+          "glue:GetPartitions",
+        ]
+        Resource = concat(
+          [local.glue_catalog_arn, local.glue_predictions_database_arn],
+          local.glue_predictions_table_arns,
+        )
+      },
+      {
+        Sid    = "ReadPredictionsDataForAthena"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket",
+        ]
+        Resource = [
+          aws_s3_bucket.pipeline.arn,
+          "${aws_s3_bucket.pipeline.arn}/predictions/*",
+        ]
+      },
+      {
+        Sid    = "WriteAthenaResults"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:ListBucket",
+          "s3:GetBucketLocation",
+        ]
+        Resource = [
+          aws_s3_bucket.pipeline.arn,
+          "${aws_s3_bucket.pipeline.arn}/${local.athena_results_prefix}*",
+        ]
+      },
+    ]
+  })
+}
+
 resource "aws_iam_role" "eventbridge_sfn" {
   name = local.iam_role_eventbridge_sfn
 

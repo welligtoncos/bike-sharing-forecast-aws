@@ -129,6 +129,21 @@ output "predictions_parquet_uri_template" {
 }
 
 output "athena_query_predictions_example" {
-  description = "Exemplo de query Athena sobre bike_sharing.predictions."
-  value       = "SELECT dteday, cnt_real, cnt_pred FROM ${var.glue_predictions_db_name}.predictions WHERE ref_date = '2011-06-01'"
+  description = "Exemplo de query Athena sobre bike_sharing.predictions (S4-02 completo)."
+  value       = "SELECT dteday, cnt_real, cnt_pred, ABS(cnt_real - cnt_pred) AS abs_error FROM ${var.glue_predictions_db_name}.predictions WHERE ref_date = '2011-06-01' ORDER BY dteday ASC"
+}
+
+output "athena_workgroup_name" {
+  description = "Workgroup Athena do pipeline (S4-02)."
+  value       = aws_athena_workgroup.pipeline.name
+}
+
+output "sfn_validate_predictions_name" {
+  description = "Step Functions para consulta Athena parametrizada por ref_date (S4-02)."
+  value       = aws_sfn_state_machine.validate_predictions.name
+}
+
+output "sfn_validate_predictions_arn" {
+  description = "ARN da state machine validate predictions (S4-02)."
+  value       = aws_sfn_state_machine.validate_predictions.arn
 }

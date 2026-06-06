@@ -10,54 +10,63 @@ flowchart TB
         EB[EventBridge<br/>cron dia 1 / mês]
     end
 
-    subgraph ORQUESTRACAO["Orquestração · S1-03 ✅"]
-        SF[Step Functions]
+    subgraph ORQUESTRACAO["Orquestração ✅"]
+        SF1[monthly_pipeline<br/>S1-03]
+        SF2[validate_predictions<br/>S4-02]
         SNS[SNS alertas falha]
     end
 
     subgraph COMPUTE["Glue Python Shell"]
-        GJ1[parse_args_job<br/>S1-02 ✅]
-        GJ2[validate_day_csv_job<br/>S2 ✅]
+        GJ1[parse_args<br/>S1-02 ✅]
+        GJ2[validate_day_csv<br/>S2 ✅]
+        GJ3[train_xgboost<br/>S3-01 ✅]
+        GJ4[register_catalog<br/>S4-01 ✅]
     end
 
     subgraph S3["S3 pipeline · S1-01 ✅"]
         RAW[raw/day.csv]
-        FEAT["features/{ref_date}/features.parquet"]
-        PRED[predictions/]
-        MOD[models/]
+        FEAT[features/…/features.parquet]
+        MET[metrics/…/metrics.json]
+        PRED["predictions/ref_date=…/"]
+        ATHOUT[athena-results/]
+        MOD[models/ · futuro]
     end
 
-    subgraph FUTURO["Futuro"]
-        GC[Glue Catalog]
-        ATH[Athena]
+    subgraph ANALYTICS["Consulta · S4 ✅"]
+        GC["Glue Catalog<br/>bike_sharing.predictions"]
+        ATH[Athena workgroup]
+        USR[Analista / BI]
     end
 
-    EB --> SF
-    SF -->|startJobRun.sync| GJ1
-    SF -.->|falha| SNS
+    EB --> SF1
+    SF1 --> GJ1
+    SF1 -.-> SNS
 
-    RAW -->|read_csv| GJ2
-    GJ2 -->|validate + filter + parquet| FEAT
+    RAW --> GJ2 --> FEAT
+    FEAT --> GJ3 --> MET
+    FEAT --> PRED
+    PRED --> GJ4 --> GC
 
-    GJ1 --> RAW
-    FEAT --> GC
-    PRED --> GC
+    SF2 --> ATH
     GC --> ATH
+    PRED --> ATH
+    ATH --> ATHOUT
+    ATH --> USR
 
     classDef done fill:#d4edda,stroke:#28a745,color:#155724
     classDef future fill:#fff3cd,stroke:#ffc107,color:#856404
-    class EB,SF,GJ1,GJ2,RAW,FEAT,SNS done
-    class PRED,MOD,GC,ATH future
+    class EB,SF1,SF2,GJ1,GJ2,GJ3,GJ4,RAW,FEAT,MET,PRED,GC,ATH,ATHOUT,SNS done
+    class MOD future
 ```
 
 ## Pipeline de features (Sprint 2)
 
 ```mermaid
 flowchart LR
-    IN["s3://bucket/raw/day.csv"] --> V["S2-01<br/>validate_schema"]
-    V --> F["S2-02<br/>filter_by_ref_date"]
+    IN["raw/day.csv"] --> V["S2-01 validate_schema"]
+    V --> F["S2-02 filter_by_ref_date"]
     F --> S["select_feature_columns"]
-    S --> OUT["S2-03<br/>features/{ref_date}/features.parquet"]
+    S --> OUT["S2-03 features.parquet"]
 
     style IN fill:#d4edda
     style V fill:#d4edda
@@ -66,21 +75,52 @@ flowchart LR
     style OUT fill:#d4edda
 ```
 
-| Passo | Módulo | Colunas / artefato |
-|-------|--------|-------------------|
-| Entrada | `read_day_csv_from_s3` | CSV completo com `dteday` |
-| Validação | `validate_schema` | `season`, `temp`, `hum`, `windspeed`, `weekday`, `cnt`, `dteday` |
-| Filtro | `filter_by_ref_date` | registros do mês/ano de `ref_date` |
-| Seleção | `select_feature_columns` | features + target (`cnt`) |
-| Saída | `save_features_parquet` | Parquet via pandas + pyarrow |
+## Pipeline de ML e métricas (Sprint 3)
+
+```mermaid
+flowchart LR
+    FEAT["features.parquet"] --> X["split 80/20"]
+    X --> TR["XGBRegressor"]
+    TR --> M["metrics.json<br/>RMSE + MAE"]
+
+    style FEAT fill:#d4edda
+    style X fill:#d4edda
+    style TR fill:#d4edda
+    style M fill:#d4edda
+```
+
+## Catalog + Athena (Sprint 4)
+
+```mermaid
+flowchart LR
+    P["predictions.parquet"] --> REG["S4-01 boto3<br/>Glue Catalog"]
+    REG --> T["bike_sharing.predictions<br/>partição ref_date"]
+    T --> Q["S4-02 Athena SQL<br/>abs_error"]
+    SF["Step Functions"] --> Q
+
+    style P fill:#d4edda
+    style REG fill:#d4edda
+    style T fill:#d4edda
+    style Q fill:#d4edda
+    style SF fill:#d4edda
+```
+
+| Passo | Story | Artefato |
+|-------|-------|----------|
+| Parquet predições | dev / futuro inferência | `predictions/ref_date={ref_date}/predictions.parquet` |
+| Registro Catalog | S4-01 | Tabela + partição Hive |
+| Query analista | S4-02 | SQL com `abs_error`, ORDER BY `dteday` |
+| Orquestração query | S4-02 | `sfn-validate-predictions` + `$.ref_date` |
 
 ## Fluxo de dados no S3
 
 ```
-1. CSV bruto     → s3://{bucket}/raw/day.csv
-2. Features      → s3://{bucket}/features/{ref_date}/features.parquet   ✅ S2-03
-3. Modelo        → s3://{bucket}/models/                               (futuro)
-4. Previsões     → s3://{bucket}/predictions/                           (futuro)
+1. CSV bruto      → s3://{bucket}/raw/day.csv
+2. Features       → s3://{bucket}/features/{ref_date}/features.parquet        ✅ S2-03
+3. Métricas       → s3://{bucket}/metrics/{ref_date}/metrics.json              ✅ S3-01
+4. Predições      → s3://{bucket}/predictions/ref_date={ref_date}/predictions.parquet  ✅ S4 (sample)
+5. Resultados SQL → s3://{bucket}/athena-results/                              ✅ S4-02
+6. Modelo         → s3://{bucket}/models/                                      (futuro)
 ```
 
 ## Recursos AWS
@@ -88,16 +128,18 @@ flowchart LR
 | Recurso | Terraform | Nome (dev) |
 |---------|-----------|------------|
 | S3 Bucket | `aws_s3_bucket.pipeline` | `glue-b3-dev-s3-pipeline-{account}` |
-| S3 Versioning | `aws_s3_bucket_versioning.pipeline` | Enabled |
-| Glue Job (args) | `aws_glue_job.parse_args` | `glue-b3-dev-glue-job-parse-args` |
-| Glue Job (features) | `aws_glue_job.validate_day_csv` | `glue-b3-dev-glue-job-validate-day-csv` |
-| State Machine | `aws_sfn_state_machine.monthly_pipeline` | `glue-b3-dev-sfn-monthly-pipeline` |
-| EventBridge | `aws_cloudwatch_event_rule.monthly_pipeline` | cron dia 1 |
-| SNS | `aws_sns_topic.pipeline_alerts` | alertas de falha |
+| Glue Job parse_args | `aws_glue_job.parse_args` | `glue-b3-dev-glue-job-parse-args` |
+| Glue Job features | `aws_glue_job.validate_day_csv` | `glue-b3-dev-glue-job-validate-day-csv` |
+| Glue Job treino | `aws_glue_job.train_xgboost` | `glue-b3-dev-glue-job-train-xgboost` |
+| Glue Job catalog | `aws_glue_job.register_predictions_catalog` | `glue-b3-dev-glue-job-register-predictions-catalog` |
+| Glue Database | `aws_glue_catalog_database.bike_sharing` | `bike_sharing` |
+| Athena Workgroup | `aws_athena_workgroup.pipeline` | `glue-b3-dev-athena-pipeline` |
+| SFN mensal | `aws_sfn_state_machine.monthly_pipeline` | `glue-b3-dev-sfn-monthly-pipeline` |
+| SFN Athena | `aws_sfn_state_machine.validate_predictions` | `glue-b3-dev-sfn-validate-predictions` |
 | IAM Role Glue | `aws_iam_role.glue` | `glue-b3-dev-iam-glue` |
-| IAM Role SFN | `aws_iam_role.stepfunctions` | Step Functions + Glue + SNS |
+| IAM Role SFN | `aws_iam_role.stepfunctions` | Glue + SNS + Athena |
 
-Scripts S3: `scripts/parse_args_job.py`, `scripts/validate_day_csv_job.py`, `scripts/schema_validation.py`
+Scripts S3: ver pasta `scripts/` — cada Glue Job tem entry point + módulo compartilhado.
 
 ## IAM — Glue
 
@@ -107,28 +149,25 @@ flowchart LR
 
     ROLE --> P1[AWSGlueServiceRole]
     ROLE --> P2[glue-s3]
-    ROLE --> P3[glue-catalog]
-    ROLE --> P4[glue-logs]
+    ROLE --> P3[glue-catalog read b3_raw]
+    ROLE --> P4[glue-catalog-write bike_sharing]
+    ROLE --> P5[glue-logs]
 ```
+
+## IAM — Step Functions
 
 | Policy | Finalidade |
 |--------|------------|
-| `glue-s3` | Ler `raw/`, gravar `features/`, `models/`, `predictions/` |
-| `glue-catalog` | Leitura database `b3_raw` (futuro crawler) |
-| `glue-logs` | CloudWatch `/aws-glue/python-jobs` |
+| `sfn-glue-sns` | Glue Job mensal + alertas SNS |
+| `sfn-athena` | Queries Athena, leitura `predictions/`, escrita `athena-results/`, Glue Catalog `bike_sharing` |
 
 ## Integração Step Functions
 
-Hoje o Step Functions invoca `parse_args_job` (S1-02). O job de features (`validate_day_csv`) roda manualmente ou será encadeado nas próximas stories:
+| State machine | Uso | Input |
+|---------------|-----|-------|
+| `monthly_pipeline` | Disparo mensal Glue parse_args | (automático via EventBridge) |
+| `validate_predictions` | Query Athena parametrizada | `{"ref_date":"2011-06-01"}` |
 
-```json
-{
-  "JobName": "glue-b3-dev-glue-job-validate-day-csv",
-  "Arguments": {
-    "--s3_input_path": "s3://bucket/raw/day.csv",
-    "--ref_date": "2011-06-01"
-  }
-}
-```
+Jobs Glue (S2–S4) rodam manualmente ou serão encadeados no `monthly_pipeline` nas próximas stories.
 
-Ver [S1-03 — Step Functions](s1-03-step-functions.md) e scripts em `scripts/`.
+Ver [S1-03 — Step Functions](s1-03-step-functions.md), [S4-01](s4-01-glue-catalog.md) e [S4-02](s4-02-athena-query.md).

@@ -25,6 +25,7 @@ locals {
     "metrics/",      # metricas de treino (RMSE, MAE) por ref_date
     "predictions/",  # resultados inferencia do modelo
     "models/",       # artefatos do modelo treinado
+    "athena-results/", # saida de queries Athena (S4-02)
   ])
 
   iam_role_glue = "${local.name_prefix}-iam-glue"
@@ -47,6 +48,11 @@ locals {
   glue_job_register_predictions_catalog_name   = "${local.name_prefix}-glue-job-register-predictions-catalog"
   glue_script_register_predictions_catalog_key = "scripts/register_predictions_catalog_job.py"
   glue_module_catalog_predictions_key          = "scripts/glue_catalog_predictions.py"
+
+  # S4-02 — Athena validacao predictions
+  athena_workgroup_name        = "${local.name_prefix}-athena-pipeline"
+  athena_results_prefix        = "athena-results/"
+  sfn_validate_predictions_name = "${local.name_prefix}-sfn-validate-predictions"
 
   glue_catalog_arn  = "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:catalog"
   glue_database_arn = "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:database/${var.glue_db_name}"
