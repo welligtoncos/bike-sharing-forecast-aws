@@ -37,3 +37,18 @@ output "glue_role_name" {
   description = "Nome da IAM Role do Glue."
   value       = aws_iam_role.glue.name
 }
+
+output "glue_job_parse_args_name" {
+  description = "Nome do Glue Job Python Shell (S1-02)."
+  value       = aws_glue_job.parse_args.name
+}
+
+output "glue_job_parse_args_arn" {
+  description = "ARN do Glue Job Python Shell (S1-02)."
+  value       = aws_glue_job.parse_args.arn
+}
+
+output "glue_script_parse_args_s3_uri" {
+  description = "URI S3 do script parse_args_job.py."
+  value       = "s3://${aws_s3_bucket.pipeline.id}/${local.glue_script_parse_args_key}"
+}

@@ -5,3 +5,4 @@ project_name   = "glue-b3"
 aws_account_id = "000000000000" # aws sts get-caller-identity --query Account --output text
 aws_region     = "us-east-1"    # regiao do provider e dos recursos S3/IAM
 environment    = "dev"          # dev | stg | staging | prod
+glue_db_name   = "b3_raw"       # database Glue referenciado na policy IAM

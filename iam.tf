@@ -6,8 +6,10 @@
 # Anexe esta role (glue_role_arn) ao criar Glue Jobs ou Crawlers nas proximas US.
 #
 # Permissoes:
-#   - AWSGlueServiceRole (managed): catalogo, logs basicos, operacoes Glue
+#   - AWSGlueServiceRole (managed): operacoes padrao Glue
 #   - Policy inline glue-s3: ListBucket + Get/Put/DeleteObject no bucket pipeline
+#   - Policy inline glue-catalog: leitura Glue Data Catalog (S1-02)
+#   - Policy inline glue-logs: CloudWatch Logs do Python Shell Job (S1-02)
 # =============================================================================
 
 # Trust policy: apenas o servico glue.amazonaws.com pode assumir esta role.
@@ -63,6 +65,59 @@ resource "aws_iam_role_policy" "glue_s3" {
           "s3:DeleteObject",
         ]
         Resource = "${aws_s3_bucket.pipeline.arn}/*"
+      },
+    ]
+  })
+}
+
+# Leitura do Glue Data Catalog — necessario para jobs que consultam tabelas/particoes.
+resource "aws_iam_role_policy" "glue_catalog" {
+  name = "${local.name_prefix}-glue-catalog"
+  role = aws_iam_role.glue.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ReadGlueCatalog"
+        Effect = "Allow"
+        Action = [
+          "glue:GetDatabase",
+          "glue:GetDatabases",
+          "glue:GetTable",
+          "glue:GetTables",
+          "glue:GetPartition",
+          "glue:GetPartitions",
+        ]
+        Resource = concat(
+          [local.glue_catalog_arn, local.glue_database_arn],
+          local.glue_table_arns,
+        )
+      },
+    ]
+  })
+}
+
+# Logs do Glue Python Shell Job em /aws-glue/python-jobs (continuous logging).
+resource "aws_iam_role_policy" "glue_logs" {
+  name = "${local.name_prefix}-glue-logs"
+  role = aws_iam_role.glue.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "WriteGlueJobLogs"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+        ]
+        Resource = [
+          local.glue_job_log_group_arn,
+          local.glue_job_log_group_stream_arn,
+        ]
       },
     ]
   })

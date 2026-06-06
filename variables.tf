@@ -42,3 +42,14 @@ variable "environment" {
     error_message = "environment deve ser: dev, stg, staging ou prod."
   }
 }
+
+variable "glue_db_name" {
+  description = "Nome logico do Glue Database (usado na policy IAM de acesso ao Catalog)."
+  type        = string
+  default     = "b3_raw"
+
+  validation {
+    condition     = can(regex("^[a-z0-9_]+$", var.glue_db_name))
+    error_message = "glue_db_name deve conter apenas letras minusculas, numeros e underscores."
+  }
+}

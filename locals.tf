@@ -27,4 +27,16 @@ locals {
   ])
 
   iam_role_glue = "${local.name_prefix}-iam-glue"
+
+  # S1-02 — Glue Job Python Shell
+  glue_job_parse_args_name   = "${local.name_prefix}-glue-job-parse-args"
+  glue_script_parse_args_key = "scripts/parse_args_job.py"
+
+  glue_catalog_arn  = "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:catalog"
+  glue_database_arn = "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:database/${var.glue_db_name}"
+  glue_table_arns = [
+    "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:table/${var.glue_db_name}/*",
+  ]
+  glue_job_log_group_arn        = "arn:aws:logs:${var.aws_region}:${var.aws_account_id}:log-group:/aws-glue/python-jobs"
+  glue_job_log_group_stream_arn = "${local.glue_job_log_group_arn}:*"
 }
